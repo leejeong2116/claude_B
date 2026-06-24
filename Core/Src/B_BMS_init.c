@@ -14,6 +14,8 @@ void BQ769x2_Init(BMS_Unit* unit)
 
 	}
 	else{
+	CommandSubcommands(unit, SET_CFGUPDATE);
+
 // ##################################################################################################################################################
 // ###################################################################### FUSE ######################################################################
 // ##################################################################################################################################################
@@ -28,15 +30,13 @@ void BQ769x2_Init(BMS_Unit* unit)
 	BQ769x2_SetRegister(unit, REG0Config, 0x01, 1); //BREG 제어 ON (REGIN 입력 활성화), REG2는 사용 안 함, REG18은 내부 참조 1.8V (하드웨어 연결)
 	BQ769x2_SetRegister(unit, HWDRegulatorOptions, 0x00, 1); // - [When Watchdog No Action] // 워치독 만료(통신 신호 끊김)되어도 LDO유지
 
-	CommandSubcommands(unit, SET_CFGUPDATE);
-
 	BQ769x2_SetRegister(unit, CommType, 0x00, 1); // I2C Basic // &hi2c2, &hi2c4 (TOP, BOT) 핸들러 정해주기, 동일한 통신 속도 설정
 	BQ769x2_SetRegister(unit, I2CAddress, 0x00, 1); // I2C Default
 	BQ769x2_SetRegister(unit, SPIConfiguration, 0x00, 1); // [not use]
 	BQ769x2_SetRegister(unit, CommIdleTime, 0x00, 1); // NO clock stretch // 클락 스트레치: 통신에서 슬레이브가 처리 시간이 더 필요할 때 클럭을 잡아 마스터를 기다리게 하는 기능
 	BQ769x2_SetRegister(unit, CFETOFFPinConfig, 0x07, 1); //cell // 지금은 셀 온도/ 차후 조정
 	BQ769x2_SetRegister(unit, DFETOFFPinConfig, 0x6A, 1); //[Active high, BOTHOFF, NO week pull-up/pull-down, REG1]
-	BQ769x2_SetRegister(unit, ALERTPinConfig, 0xAA, 1); // [Active high, ALERT, NO week pull-up/pull-down]
+	BQ769x2_SetRegister(unit, ALERTPinConfig, 0xAA, 1); // [Active low, ALERT, NO week pull-up/pull-down]
 	BQ769x2_SetRegister(unit, TS1Config, 0x07, 1); //cell // 지금은 셀 온도(셀, FET, 버스바/인터커넥트 설정가능)/ 차후 조정 / 18k
 	BQ769x2_SetRegister(unit, TS2Config, 0x00, 1); // OFF(Wake)
 	BQ769x2_SetRegister(unit, TS3Config, 0x07, 1); //cell // 지금은 셀 온도/ 차후 조정
@@ -178,7 +178,7 @@ void BQ769x2_Init(BMS_Unit* unit)
 	BQ769x2_SetRegister(unit, OCCThreshold, 0x0A, 1); // [20mV] // max charge current 10A -> 5p -> 50A ,shunt register 0.4m -> 50*0.4m = 20mV
 	BQ769x2_SetRegister(unit, OCCDelay, 0x7F, 1); // [419.1+6.6 = 425.7ms]
 	BQ769x2_SetRegister(unit, OCCRecoveryThreshold, 0xFC17, 2); // [-1A]
-	BQ769x2_SetRegister(unit, OCCPACKTOSDelta, 0x00C8, 1); // [2V]
+	BQ769x2_SetRegister(unit, OCCPACKTOSDelta, 0x00C8, 2); // [2V = 200 × 10mV]
 	BQ769x2_SetRegister(unit, OCD1Threshold, 0x0D, 1); // 65 * 0.4m [26mV]
 	BQ769x2_SetRegister(unit, OCD1Delay, 0x7F, 1); // [419.1+6.6 = 425.7ms]
 	BQ769x2_SetRegister(unit, OCD2Threshold, 0x19, 1); // 125 * 0.4m [50mV]
@@ -247,10 +247,10 @@ void BQ769x2_Init(BMS_Unit* unit)
 	BQ769x2_SetRegister(unit, SOTFThreshold, 0x69, 1); // [105`C]
 	BQ769x2_SetRegister(unit, SOTFDelay, 0x05, 1); // [5s]
 	BQ769x2_SetRegister(unit, VIMRCheckVoltage, 0x0C80, 2); // [3.2V]
-	BQ769x2_SetRegister(unit, VIMRMaxRelaxCurrent, 0x32, 1); // [50mA]
+	BQ769x2_SetRegister(unit, VIMRMaxRelaxCurrent, 0x0032, 2); // [50mA]
 	BQ769x2_SetRegister(unit, VIMRThreshold, 0x01F4, 2); // [0.5V]
 	BQ769x2_SetRegister(unit, VIMRDelay, 0x05, 1); // [5s]
-	BQ769x2_SetRegister(unit, VIMRRelaxMinDuration, 0x12C, 1); // [300s]
+	BQ769x2_SetRegister(unit, VIMRRelaxMinDuration, 0x012C, 2); // [300s]
 	BQ769x2_SetRegister(unit, VIMACheckVoltage, 0x0D48, 2); // [3.4V]
 	BQ769x2_SetRegister(unit, VIMAMinActiveCurrent, 0x01F4, 2); // [500mA]
 	BQ769x2_SetRegister(unit, VIMAThreshold, 0x01F4, 2); // [0.5V]
@@ -259,7 +259,7 @@ void BQ769x2_Init(BMS_Unit* unit)
 	BQ769x2_SetRegister(unit, CFETFOFFDelay, 0x05, 1); // [5s]
 	BQ769x2_SetRegister(unit, DFETFOFFThreshold, 0xFE0B, 2); // [-0.5A]
 	BQ769x2_SetRegister(unit, DFETFOFFDelay, 0x05, 1); // [5S]
-	BQ769x2_SetRegister(unit, VSSFFailThreshold, 0x64, 1); //[100]
+	BQ769x2_SetRegister(unit, VSSFFailThreshold, 0x0064, 2); //[100]
 	BQ769x2_SetRegister(unit, VSSFDelay, 0x05, 1); // [5s]
 	BQ769x2_SetRegister(unit, PF2LVLDelay, 0x05, 1); // [5s]
 	BQ769x2_SetRegister(unit, LFOFDelay, 0x05, 1); // [5s]
@@ -269,7 +269,7 @@ void BQ769x2_Init(BMS_Unit* unit)
 // ################################################################### SECTION 9 ####################################################################
 // ##################################################################################################################################################
 	BQ769x2_SetRegister(unit, CCGain, 0x41975E35, 4); //[ 전류 센서 - 7.5684/ 0.4mOhm = 18.921]
-	BQ769x2_SetRegister(unit, CapacityGain, 0x50282FC9, 4); //[ 18.921 * 298261.6178 = 5,643,408,060.39 ->0x4FB19293]
+	BQ769x2_SetRegister(unit, CapacityGain, 0x4AAC3920, 4); //[ CCGain(18.921) * 298261.6178 = 5,643,408 ->0x4AAC3920 (이전 0x50282FC9는 약 113억으로 max 4.19억 초과)]
 
 	CommandSubcommands(unit, EXIT_CFGUPDATE); // Exit CONFIGUPDATE mode  - Subcommand 0x0092
 	}
