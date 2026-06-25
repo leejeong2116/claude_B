@@ -51,11 +51,10 @@ static void Accumulate_No_Load_Time(uint32_t elapsed_ms)
 
 void Enter_Sleep_Sequence(void)
 {
-	if (!Is_No_Load()) { // 부하가 흐르고 있다면 (주행 중이라면)
-	        no_load_time_ms = 0; // 누적된 시간 강제 초기화
-	        return; // 즉시 함수 탈출! (아래 수면 로직 실행 안 함)
-	        return;
-	    }
+    if (!Is_No_Load()) {
+        no_load_time_ms = 0;
+        return;
+    }
     bool entered_stop_mode = false;
     bool is_bot_sleep = ((BMS[BOT].BattStat & BMS_BATTERY_STATUS_SLEEP_BIT) != 0U);
     bool is_top_sleep = ((BMS[TOP].BattStat & BMS_BATTERY_STATUS_SLEEP_BIT) != 0U);
@@ -76,26 +75,29 @@ void Enter_Sleep_Sequence(void)
             Accumulate_No_Load_Time(BMS_NORMAL_SCAN_PERIOD_MS);  // 노멀 상태에서 시간 누적
         }
 
-    HAL_SuspendTick();
-
     if (no_load_time_ms >= TIME_3_DAYS_MS) {
         CommandSubcommands(&BMS[BOT], SHUTDOWN);
         CommandSubcommands(&BMS[TOP], SHUTDOWN);
-        HAL_Delay(5);
+        delayUS(5000);
+        HAL_SuspendTick();
         HAL_PWREx_EnterSHUTDOWNMode();
-    } else if (no_load_time_ms >= TIME_1_HOUR_MS) {
+    }
+
+    HAL_SuspendTick();
+
+    if (no_load_time_ms >= TIME_1_HOUR_MS) {
         HAL_PWREx_EnterSTOP1Mode(PWR_STOPENTRY_WFI);
         entered_stop_mode = true;
     } else {
         HAL_PWR_EnterSLEEPMode(PWR_MAINREGULATOR_ON, PWR_SLEEPENTRY_WFI);
     }
 
+    HAL_ResumeTick();
+
     if (entered_stop_mode) {
         SystemClock_Config();
         BMS_FanControl_Init();
     }
-
-    HAL_ResumeTick();
 }
 
 void Handle_Wakeup_Event(void)

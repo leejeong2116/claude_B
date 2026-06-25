@@ -29,6 +29,7 @@
 #include "B_BMS.h"
 #include "B_BMS_init.h"
 #include "B_TEST_BMS.h"
+#include "B_BMS_power_mode.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -153,12 +154,13 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+    Handle_Wakeup_Event();
     LV_BMS_WHILE_RUN();
     BMS_FanControl_Update();
     BMS_CAN_SendRunData(TOP);
     BMS_CAN_SendRunData(BOT);
     LV_STAT();
-    HAL_Delay(100);
+    Enter_Sleep_Sequence();
   }
   /* USER CODE END 3 */
 }
