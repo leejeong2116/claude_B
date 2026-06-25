@@ -93,9 +93,14 @@ After waking from STOP1, both `SystemClock_Config()` and `BMS_FanControl_Init()`
 
 "No load" is defined as `|Pack_Current| < 1000` (units: 10 mA steps from BQ, so < 10 A).
 
-### Examples directory
+### EVM test helpers
 
-`Examples/STM32U5_StopWake_Test/` is a standalone EVM test helper for STOP1 wake behavior. It is **not part of the BMS project build** — it must be copied into a separate STM32CubeIDE project to use.
+Standalone STM32U5 EVM bring-up helpers (STOP1 wake, cooling-fan PWM) live in a
+**separate repository**, not in this build:
+<https://github.com/leejeong2116/STM32U5_EVM_Tests>
+
+The `STM32U5_PWM_Fan_Test` helper mirrors the `fan_duty_from_temp()` curve in
+`B_BMS.c` — keep its constants in sync if the real fan thresholds change.
 
 ## Key invariants
 
