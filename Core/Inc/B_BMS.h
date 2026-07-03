@@ -131,6 +131,7 @@ extern BMS_Unit BMS[STACK];
 extern uint8_t LV_BMS_initOK;
 extern uint16_t LV_BMS_running;
 extern unsigned int RX_CRC_Fail;
+extern unsigned int I2C_HAL_Fail;
 
 void LV_BMS_MAIN_RUN(void);
 void LV_BMS_WHILE_RUN(void);

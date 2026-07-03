@@ -38,12 +38,15 @@ LV_BMS_MAIN_RUN()        ← one-time init: I2C init, BQ reset, BQ769x2_Init for
 BMS_FanControl_Init()
 
 while(1):
+  Handle_Wakeup_Event()  ← re-syncs BQ sleep mask after an ALERT-pin wakeup
   LV_BMS_WHILE_RUN()     ← read all BQ data + sync shared hardware data
   BMS_FanControl_Update()
   BMS_CAN_SendRunData(TOP/BOT)
-  LV_STAT()              ← LED status: red=fault, green=normal
-  HAL_Delay(100)         ← 100 ms cycle
+  LV_STAT()              ← LED status: red=fault (protection, permanent-fail, or I2C/CRC comm error), green=normal
+  Enter_Sleep_Sequence() ← paces the loop and chooses MCU SLEEP/STOP1/SHUTDOWN based on no-load time
 ```
+
+`Enter_Sleep_Sequence()` (in `B_BMS_power_mode.c`) is what paces the loop, not a fixed `HAL_Delay(100)`: while there is load it calls `HAL_Delay(BMS_NORMAL_SCAN_PERIOD_MS)` (63 ms) so the loop can't run away at I2C speed; once `Is_No_Load()` is true it also decides whether to drop into MCU SLEEP or STOP1 (see Power management below).
 
 ### Application source files (Core/Src/)
 

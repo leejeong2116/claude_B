@@ -13,6 +13,7 @@
 #include "B_BMS_init.h"
 
 unsigned int RX_CRC_Fail = 0;
+unsigned int I2C_HAL_Fail = 0;
 uint8_t LV_BMS_initOK = 0;
 uint16_t LV_BMS_running = 0;
 BMS_Unit BMS[STACK] = {0};
@@ -251,9 +252,13 @@ void I2C_WriteReg(BMS_Unit *unit, uint8_t reg_addr, uint8_t *reg_data, uint8_t c
         TX_Buffer[j++] = CRC8(&reg_data[i], 1);
     }
 
-    HAL_I2C_Mem_Write(unit->hi2c, unit->dev_addr, reg_addr, 1, TX_Buffer, crc_count, 1000);
+    if (HAL_I2C_Mem_Write(unit->hi2c, unit->dev_addr, reg_addr, 1, TX_Buffer, crc_count, 1000) != HAL_OK) {
+        I2C_HAL_Fail++;
+    }
 #else
-    HAL_I2C_Mem_Write(unit->hi2c, unit->dev_addr, reg_addr, 1, reg_data, count, 1000);
+    if (HAL_I2C_Mem_Write(unit->hi2c, unit->dev_addr, reg_addr, 1, reg_data, count, 1000) != HAL_OK) {
+        I2C_HAL_Fail++;
+    }
 #endif
 }
 
@@ -266,11 +271,16 @@ int I2C_ReadReg(BMS_Unit *unit, uint8_t reg_addr, uint8_t *reg_data, uint8_t cou
     uint8_t ReceiveBuffer[MAX_BUFFER_SIZE] = {0};
     unsigned int j = 2;
 
-    HAL_I2C_Mem_Read(unit->hi2c, unit->dev_addr, reg_addr, 1, ReceiveBuffer, crc_count, 1000);
+    if (HAL_I2C_Mem_Read(unit->hi2c, unit->dev_addr, reg_addr, 1, ReceiveBuffer, crc_count, 1000) != HAL_OK) {
+        I2C_HAL_Fail++;
+        return -1;
+    }
 
     uint8_t crc1stByteBuffer[4] = {unit->dev_addr, reg_addr, (uint8_t)(unit->dev_addr + 1U), ReceiveBuffer[0]};
+    uint8_t crc_ok = 1U;
     if (CRC8(crc1stByteBuffer, 4) != ReceiveBuffer[1]) {
         RX_CRC_Fail++;
+        crc_ok = 0U;
     }
 
     RX_Buffer[0] = ReceiveBuffer[0];
@@ -279,13 +289,22 @@ int I2C_ReadReg(BMS_Unit *unit, uint8_t reg_addr, uint8_t *reg_data, uint8_t cou
         RX_Buffer[i] = ReceiveBuffer[j];
         if (CRC8(&ReceiveBuffer[j], 1) != ReceiveBuffer[j + 1U]) {
             RX_CRC_Fail++;
+            crc_ok = 0U;
         }
         j += 2U;
     }
 
+    // CRC 실패 시 손상된 값을 reg_data에 반영하지 않고 이전 값을 그대로 유지한다.
+    if (!crc_ok) {
+        return -1;
+    }
+
     CopyArray(RX_Buffer, reg_data, count);
 #else
-    HAL_I2C_Mem_Read(unit->hi2c, unit->dev_addr, reg_addr, 1, reg_data, count, 2000);
+    if (HAL_I2C_Mem_Read(unit->hi2c, unit->dev_addr, reg_addr, 1, reg_data, count, 2000) != HAL_OK) {
+        I2C_HAL_Fail++;
+        return -1;
+    }
 #endif
 
     return 0;

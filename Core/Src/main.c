@@ -53,7 +53,8 @@
 extern BMS_Unit BMS[STACK];
 extern uint8_t LV_BMS_initOK;
 extern uint16_t LV_BMS_running;
-uint32_t loop_cnt = 0;
+extern unsigned int RX_CRC_Fail;
+extern unsigned int I2C_HAL_Fail;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -86,8 +87,20 @@ void delayUS(uint32_t us)
 
 void LV_STAT()
 {
-    // 1. BMS 보호 로직 작동 시 (ProtectionsTriggered)
-    if (BMS[TOP].ProtectionsTriggered || BMS[BOT].ProtectionsTriggered)
+    static unsigned int prev_RX_CRC_Fail = 0;
+    static unsigned int prev_I2C_HAL_Fail = 0;
+
+    // 이번 주기에 새로 발생한 통신 오류(CRC 불일치 / I2C HAL 오류)가 있는지 확인
+    uint8_t comm_error = ((RX_CRC_Fail != prev_RX_CRC_Fail) || (I2C_HAL_Fail != prev_I2C_HAL_Fail)) ? 1U : 0U;
+    prev_RX_CRC_Fail = RX_CRC_Fail;
+    prev_I2C_HAL_Fail = I2C_HAL_Fail;
+
+    uint8_t fault = (BMS[TOP].ProtectionsTriggered || BMS[BOT].ProtectionsTriggered ||
+                      BMS[TOP].PF_ProtectionsTriggered || BMS[BOT].PF_ProtectionsTriggered ||
+                      comm_error) ? 1U : 0U;
+
+    // 1. BMS 보호 로직(일반/영구 고장) 또는 통신 오류 발생 시
+    if (fault)
     {
         // 에러 상태: RED LED 점등, GREEN LED 소등
         HAL_GPIO_WritePin(BOT_RED_GPIO_Port, BOT_RED_Pin, GPIO_PIN_SET);
@@ -100,8 +113,6 @@ void LV_STAT()
         HAL_GPIO_WritePin(BOT_GREEN_GPIO_Port, BOT_GREEN_Pin, GPIO_PIN_SET);
         HAL_GPIO_WritePin(BOT_RED_GPIO_Port, BOT_RED_Pin, GPIO_PIN_RESET);
     }
-
-    // 3. 통신 에러 등 추가 상태는 i2c2.ErrorCode 등을 활용해 확장 가능합니다.
 }
 /* USER CODE END 0 */
 
