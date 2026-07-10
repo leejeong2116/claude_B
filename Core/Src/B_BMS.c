@@ -11,6 +11,7 @@
 
 #include "B_BMS.h"
 #include "B_BMS_init.h"
+#include "B_BMS_soc.h"
 
 unsigned int RX_CRC_Fail = 0;
 unsigned int I2C_HAL_Fail = 0;
@@ -111,6 +112,7 @@ static void sync_current_data(BMS_Unit *target, const BMS_Unit *source)
     target->AccumulatedCharge_Int = source->AccumulatedCharge_Int;
     target->AccumulatedCharge_Frac = source->AccumulatedCharge_Frac;
     target->AccumulatedCharge_Time = source->AccumulatedCharge_Time;
+    target->SOC_Permille = source->SOC_Permille;
 }
 
 static void sync_fet_data(BMS_Unit *target, const BMS_Unit *source)
@@ -190,6 +192,7 @@ void LV_BMS_WHILE_RUN(void)
         BQ769x2_ReadDASTATUS6(&BMS[i]);
     }
 
+    BMS_SOC_Update();
     BMS_SyncSharedHardwareData();
     LV_BMS_running++;
 }

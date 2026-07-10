@@ -39,7 +39,7 @@ BMS_FanControl_Init()
 
 while(1):
   Handle_Wakeup_Event()  ← re-syncs BQ sleep mask after an ALERT-pin wakeup
-  LV_BMS_WHILE_RUN()     ← read all BQ data + sync shared hardware data
+  LV_BMS_WHILE_RUN()     ← read all BQ data + update SOC + sync shared hardware data
   BMS_FanControl_Update()
   BMS_CAN_SendRunData(TOP/BOT)
   LV_STAT()              ← LED status: red=fault (protection, permanent-fail, or I2C/CRC comm error), green=normal
@@ -56,6 +56,7 @@ while(1):
 | `B_BMS_init.c` | One-time BQ769x2 register configuration (called from `BMS_MAIN_RUN`). **Only BOT is configured**; the `if(unit == &BMS[TOP])` block is intentionally empty — TOP uses default values |
 | `B_BMS_cmd.h` | All BQ769x2 data-memory register addresses and direct/subcommand codes |
 | `B_BMS_power_mode.c` | MCU and BQ sleep/wakeup sequencing: SLEEP → STOP1 (after 1 hr no load) → SHUTDOWN (after 3 days) |
+| `B_BMS_soc.c` | Pack SOC estimation: coulomb counting off the BQ769x2's CC2-based accumulated-charge integrator, re-anchored to an OCV lookup after long rest periods |
 | `B_TEST_BMS.c` | Extended diagnostics readout (CB status, snapshots) |
 | `B_TEST_BMS_can.c` | CAN telemetry — run data and full test/diagnostic frames |
 
@@ -77,9 +78,9 @@ All CAN frames are 8-byte standard-ID. Byte order is **big-endian** in CAN frame
 | BOT | 0x500 | 0x100 |
 | TOP | 0x600 | 0x200 |
 
-Run data (3 frames per board): fault flags + status, stack/pack voltage, current + cell voltage extremes + temperature.
+Run data (4 frames per board): fault flags + status, stack/pack voltage, current + cell voltage extremes + temperature, SOC (permille, `base + 0x03`).
 
-Test data adds: all 16 cell voltages, temperatures, CB status, CUV/COV snapshots, coulomb counter data.
+Test data adds: all 16 cell voltages, temperatures, CB status, CUV/COV snapshots, coulomb counter data, SOC (permille, `base + 0x33`).
 
 ### Fan control
 
@@ -95,6 +96,15 @@ TIM2 CH2 PWM drives the cooling fan. **TIM2 is reserved for fan — do not use i
 After waking from STOP1, both `SystemClock_Config()` and `BMS_FanControl_Init()` (re-starts TIM2 PWM) must be called — this is already done in `B_BMS_power_mode.c`.
 
 "No load" is defined as `|Pack_Current| < 1000` (units: 10 mA steps from BQ, so < 10 A).
+
+### SOC estimation (`B_BMS_soc.c`)
+
+`BMS_SOC_Update()` runs every cycle inside `LV_BMS_WHILE_RUN()`, right before `BMS_SyncSharedHardwareData()`, so both stacks see the same `SOC_Permille` value (0–1000 = 0.0–100.0 %) after sync.
+
+- **Coulomb counting**: uses the BQ769x2's own CC2-based integrator (`AccumulatedCharge_Int`/`AccumulatedCharge_Frac` from `DASTATUS6`) rather than manually integrating `Pack_Current * dt` in the MCU — the chip keeps integrating through MCU STOP1 sleep, so no samples are lost while asleep. Each cycle's delta is divided by the pack capacity (`BMS_PACK_CAPACITY_mAh`, 24 Ah) to update SOC.
+- **OCV re-anchoring**: once `no_load_time_ms` (tracked in `B_BMS_power_mode.c`) exceeds `BMS_SOC_OCV_REST_MS` (10 min), cell voltages are assumed to have relaxed to open-circuit, and SOC is overwritten from an OCV→SOC lookup table instead of the coulomb-counted value. This bounds long-run coulomb-counting drift.
+- `BMS_SOC_Init()` (called once from `main()` after `LV_BMS_MAIN_RUN()`) resets the estimator so the first `BMS_SOC_Update()` call seeds SOC from OCV rather than an assumed baseline.
+- The OCV table in `B_BMS_soc.c` is an approximate NMC Li-ion curve sized to the CUV/COV thresholds in `B_BMS_init.c` (~2.53 V–4.20 V) — **replace it with the actual cell's characterization data before relying on it for the race.**
 
 ### Examples directory
 
