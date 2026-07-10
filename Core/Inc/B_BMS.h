@@ -124,6 +124,8 @@ typedef struct _BMS_Unit {
     uint32_t AccumulatedCharge_Frac;
     uint32_t AccumulatedCharge_Time;
 
+    uint16_t SOC_Permille;
+
     uint32_t Global_Fault_Flags;
 } BMS_Unit;
 

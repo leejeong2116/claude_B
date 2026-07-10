@@ -113,6 +113,12 @@ void BMS_CAN_SendRunData(uint8_t board_type)
     put_u16_be(BMS_TxData, 4, unit->MinCellVolatge);
     put_i16_be(BMS_TxData, 6, temp_to_deci_c(unit->CELL_Temp));
     bms_can_send(base + 0x02U, BMS_TxData);
+
+    put_u16_be(BMS_TxData, 0, current_unit->SOC_Permille);
+    put_u16_be(BMS_TxData, 2, 0);
+    put_u16_be(BMS_TxData, 4, 0);
+    put_u16_be(BMS_TxData, 6, 0);
+    bms_can_send(base + 0x03U, BMS_TxData);
 }
 
 void BMS_CAN_SendTestData(uint8_t board_type)
@@ -203,6 +209,12 @@ void BMS_CAN_SendTestData(uint8_t board_type)
     put_u16_be(BMS_TxData, 4, unit->Battery_Voltage_Sum);
     put_u16_be(BMS_TxData, 6, unit->LD_Voltage_Raw);
     bms_can_send(base + 0x32U, BMS_TxData);
+
+    put_u16_be(BMS_TxData, 0, current_unit->SOC_Permille);
+    put_u16_be(BMS_TxData, 2, 0);
+    put_u16_be(BMS_TxData, 4, 0);
+    put_u16_be(BMS_TxData, 6, 0);
+    bms_can_send(base + 0x33U, BMS_TxData);
 
     send_u16_array(base, 0x40U, unit->CUV_Snapshot);
     send_u16_array(base, 0x50U, unit->COV_Snapshot);

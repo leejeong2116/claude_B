@@ -1,0 +1,116 @@
+/*
+ * B_BMS_soc.c
+ *
+ * Pack-level SOC estimation: coulomb counting against the BQ769x2's
+ * built-in CC2-based accumulated-charge integrator (DASTATUS6), periodically
+ * re-anchored to an OCV lookup once the pack has rested long enough for
+ * cell voltages to relax back toward open-circuit. This corrects the
+ * long-term drift that pure coulomb counting accumulates over a multi-day
+ * race without needing a full current*dt integration in the MCU.
+ */
+#include "B_BMS.h"
+#include "B_BMS_soc.h"
+#include "B_BMS_power_mode.h"
+
+#define BMS_PACK_CAPACITY_mAh 24000.0f              // 팩 전체 용량 24Ah
+#define BMS_SOC_OCV_REST_MS (10UL * 60UL * 1000UL)  // 10분 이상 무부하 지속 시 셀 전압이 OCV에 근접했다고 보고 재보정
+
+typedef struct {
+    uint16_t ocv_mV;
+    uint16_t soc_permille;
+} SOC_OCVPoint;
+
+// 대략적인 Li-ion(NMC) 셀 OCV-SOC 커브 (셀 1개 기준, mV).
+// B_BMS_init.c의 CUV(~2.53V)/COV(~4.20V) 임계값 범위에 맞춘 근사치이며,
+// 실제 사용 셀의 데이터시트/특성화 데이터로 반드시 교체해서 보정할 것.
+static const SOC_OCVPoint ocv_table[] = {
+    {3000,    0},
+    {3450,   50},
+    {3600,  100},
+    {3700,  200},
+    {3760,  300},
+    {3790,  400},
+    {3820,  500},
+    {3870,  600},
+    {3920,  700},
+    {3980,  800},
+    {4060,  900},
+    {4100,  950},
+    {4150, 1000},
+};
+#define OCV_TABLE_LEN (sizeof(ocv_table) / sizeof(ocv_table[0]))
+
+static uint8_t soc_initialized = 0;
+static float soc_permille_f = 0.0f;
+static float last_accum_charge_mAh = 0.0f;
+
+static uint16_t lookup_ocv_permille(float ocv_mV)
+{
+    if (ocv_mV <= (float)ocv_table[0].ocv_mV) {
+        return ocv_table[0].soc_permille;
+    }
+    if (ocv_mV >= (float)ocv_table[OCV_TABLE_LEN - 1U].ocv_mV) {
+        return ocv_table[OCV_TABLE_LEN - 1U].soc_permille;
+    }
+
+    for (uint32_t i = 0; i < (OCV_TABLE_LEN - 1U); i++) {
+        if (ocv_mV >= (float)ocv_table[i].ocv_mV && ocv_mV <= (float)ocv_table[i + 1U].ocv_mV) {
+            float span_mV = (float)(ocv_table[i + 1U].ocv_mV - ocv_table[i].ocv_mV);
+            float span_permille = (float)(ocv_table[i + 1U].soc_permille - ocv_table[i].soc_permille);
+            float frac = (ocv_mV - (float)ocv_table[i].ocv_mV) / span_mV;
+            return (uint16_t)((float)ocv_table[i].soc_permille + (frac * span_permille));
+        }
+    }
+
+    return 500U;
+}
+
+// TOP/BOT 각 16셀 평균 전압을 다시 평균 -> 팩 내 셀 1개의 대표 전압(mV)
+static float average_cell_voltage_mV(void)
+{
+    float top_avg = (float)BMS[TOP].Battery_Voltage_Sum / 16.0f;
+    float bot_avg = (float)BMS[BOT].Battery_Voltage_Sum / 16.0f;
+
+    return (top_avg + bot_avg) / 2.0f;
+}
+
+// AccumulatedCharge_Int(mAh, 정수부) + Frac(mAh, 32비트 고정소수 분수부)를 mAh 실수값으로 변환
+static float accumulated_charge_mAh(const BMS_Unit *unit)
+{
+    return (float)unit->AccumulatedCharge_Int + ((float)unit->AccumulatedCharge_Frac / 4294967296.0f);
+}
+
+void BMS_SOC_Init(void)
+{
+    soc_initialized = 0;
+    soc_permille_f = 0.0f;
+    last_accum_charge_mAh = 0.0f;
+}
+
+void BMS_SOC_Update(void)
+{
+    BMS_Unit *current_unit = &BMS[BOT]; // BMS_CURRENT_BOARD: 전류/쿨롱카운터 데이터는 BOT에서만 유효
+    float accum_mAh = accumulated_charge_mAh(current_unit);
+
+    if (!soc_initialized) {
+        soc_permille_f = (float)lookup_ocv_permille(average_cell_voltage_mV());
+        soc_initialized = 1;
+    } else {
+        float delta_mAh = accum_mAh - last_accum_charge_mAh;
+        soc_permille_f += (delta_mAh / BMS_PACK_CAPACITY_mAh) * 1000.0f;
+
+        if (no_load_time_ms >= BMS_SOC_OCV_REST_MS) {
+            soc_permille_f = (float)lookup_ocv_permille(average_cell_voltage_mV());
+        }
+    }
+
+    last_accum_charge_mAh = accum_mAh;
+
+    if (soc_permille_f > 1000.0f) {
+        soc_permille_f = 1000.0f;
+    } else if (soc_permille_f < 0.0f) {
+        soc_permille_f = 0.0f;
+    }
+
+    current_unit->SOC_Permille = (uint16_t)soc_permille_f;
+}

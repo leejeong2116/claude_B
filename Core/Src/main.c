@@ -30,6 +30,7 @@
 #include "B_BMS_init.h"
 #include "B_TEST_BMS.h"
 #include "B_BMS_power_mode.h"
+#include "B_BMS_soc.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -156,6 +157,7 @@ int main(void)
   /* USER CODE BEGIN 2 */
   BMS_FanControl_Init();
   LV_BMS_MAIN_RUN();
+  BMS_SOC_Init();
   /* USER CODE END 2 */
 
   /* Infinite loop */
