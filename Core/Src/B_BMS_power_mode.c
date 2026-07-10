@@ -53,6 +53,8 @@ void Enter_Sleep_Sequence(void)
 {
     if (!Is_No_Load()) {
         no_load_time_ms = 0;
+        // 부하가 있을 때도 루프 주기를 일정하게 유지 (I2C/CAN이 풀 스피드로 폭주하지 않도록)
+        HAL_Delay(BMS_NORMAL_SCAN_PERIOD_MS);
         return;
     }
     bool entered_stop_mode = false;

@@ -57,11 +57,18 @@ static void bms_can_prepare_header(uint32_t identifier)
     BMS_TxHeader.MessageMarker = 0;
 }
 
+#define BMS_CAN_TX_TIMEOUT_MS 5U
+
 static void bms_can_send(uint32_t identifier, const uint8_t data[8])
 {
     bms_can_prepare_header(identifier);
 
+    uint32_t start = HAL_GetTick();
     while (HAL_FDCAN_GetTxFifoFreeLevel(&hfdcan1) == 0) {
+        if ((HAL_GetTick() - start) >= BMS_CAN_TX_TIMEOUT_MS) {
+            // TX FIFO가 타임아웃 내에 비지 않음 (버스오프 등) - 이 프레임은 포기하고 나머지 루프(BQ 모니터링/팬/LED)가 멈추지 않게 함
+            return;
+        }
     }
 
     HAL_FDCAN_AddMessageToTxFifoQ(&hfdcan1, &BMS_TxHeader, (uint8_t *)data);
