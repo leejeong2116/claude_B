@@ -12,7 +12,7 @@
 #include "B_BMS_soc.h"
 #include "B_BMS_power_mode.h"
 
-#define BMS_PACK_CAPACITY_mAh 24000.0f              // 팩 전체 용량 24Ah
+#define BMS_PACK_CAPACITY_mAh 26000.0f              // 팩 전체 용량 26Ah (30S4P, Molicel INR-21700-M65A 6500mAh/cell(typical) x 4P)
 #define BMS_SOC_OCV_REST_MS (10UL * 60UL * 1000UL)  // 10분 이상 무부하 지속 시 셀 전압이 OCV에 근접했다고 보고 재보정
 
 typedef struct {
@@ -20,23 +20,25 @@ typedef struct {
     uint16_t soc_permille;
 } SOC_OCVPoint;
 
-// 대략적인 Li-ion(NMC) 셀 OCV-SOC 커브 (셀 1개 기준, mV).
-// B_BMS_init.c의 CUV(~2.53V)/COV(~4.20V) 임계값 범위에 맞춘 근사치이며,
-// 실제 사용 셀의 데이터시트/특성화 데이터로 반드시 교체해서 보정할 것.
+// Molicel INR-21700-M65A 데이터시트(datasheets/(몰리셀)2025-Product-Data-Sheet-of-INR-21700-M65A...pdf)의
+// "Discharge Rate Characteristics" 그래프 중 가장 낮은 방전율(1.30A, 약 0.2C, OCV에 가장 근접) 커브를
+// 눈금 단위로 읽어 SOC 10% 간격으로 옮긴 값 (셀 1개 기준, mV). 데이터시트가 표가 아닌 그래프로만 제공되어
+// 그래프 판독 기반 근사치이며, 실측/정밀 디지타이징 데이터가 있으면 교체할 것.
+// Nominal 3.6V, Charge 4.2V, Discharge cut-off 2.5V (데이터시트 CELL CHARACTERISTICS 표 기준)
 static const SOC_OCVPoint ocv_table[] = {
-    {3000,    0},
-    {3450,   50},
-    {3600,  100},
-    {3700,  200},
-    {3760,  300},
-    {3790,  400},
-    {3820,  500},
-    {3870,  600},
-    {3920,  700},
-    {3980,  800},
-    {4060,  900},
-    {4100,  950},
-    {4150, 1000},
+    {2500,    0},
+    {3050,   50},
+    {3280,  100},
+    {3480,  200},
+    {3580,  300},
+    {3640,  400},
+    {3680,  500},
+    {3720,  600},
+    {3780,  700},
+    {3850,  800},
+    {3970,  900},
+    {4110,  950},
+    {4200, 1000},
 };
 #define OCV_TABLE_LEN (sizeof(ocv_table) / sizeof(ocv_table[0]))
 
