@@ -73,14 +73,38 @@ BQ769x2 has three command types used throughout the driver:
 
 All CAN frames are 8-byte standard-ID. Byte order is **big-endian** in CAN frames (unlike the little-endian BQ register reads).
 
-| Board | Run data base ID | Test/diagnostic base ID |
+IDs follow `datasheets/bms_can_id_spec.csv`, defined as `CANID_*` macros at the top of `B_TEST_BMS_can.c`. Frames with no matching entry in that spreadsheet keep their legacy `base + offset` address (BOT test-data base `0x100`, TOP test-data base `0x200`) until a new ID is assigned — these are commented `/* legacy */` in the source.
+
+| Content | BOT | TOP |
 |---|---|---|
-| BOT | 0x500 | 0x100 |
-| TOP | 0x600 | 0x200 |
+| Status (fault/status) — run data | `0x040` | `0x043` |
+| Stack/pack voltage — run data | `0x041` | `0x044` |
+| Current/cell voltage/temp — run data | `0x042` | `0x045` |
+| SOC — run data *(legacy)* | `0x503` | `0x603` |
+| Cell voltages ×16 (4 frames) | `0x046`–`0x049` | `0x04F`–`0x052` |
+| Raw voltages (Max/Min/Stack/Pack) *(legacy)* | `0x110` | `0x210` |
+| Stack/pack voltage — test data *(legacy)* | `0x111` | `0x211` |
+| Current detail (CC1/CC3/CB active cells) *(legacy)* | `0x112` | `0x212` |
+| Temperature frame 1 (TS1/FET/Int/CFETOFF) | `0x04A` | `0x053` |
+| Temperature frame 2 (HDQ/Max/Min/Avg) | `0x04B` | `0x054` |
+| Status — test data *(legacy)* | `0x120` | `0x220` |
+| Safety alert/status | `0x058` | `0x06B` |
+| Permanent-fail alert/status | `0x059` | `0x06C` |
+| FET status (CHG/DSG/PDSG) *(legacy)* | `0x123` | `0x223` |
+| CB_Status1 | `0x05A` | `0x06D` |
+| Coulomb counter: accumulated charge int/frac | `0x04C` | `0x055` |
+| Coulomb counter: accumulated time/CC2 | `0x04D` | `0x056` |
+| Coulomb counter: CC3/voltage sum/LD voltage | `0x04E` | `0x057` |
+| SOC — test data *(legacy)* | `0x133` | `0x233` |
+| CUV snapshot ×16 (4 frames) | `0x05B`–`0x05E` | `0x06E`–`0x071` |
+| COV snapshot ×16 (4 frames) | `0x05F`–`0x062` | `0x072`–`0x075` |
+| CB_Status2 ×16 (4 frames) | `0x063`–`0x066` | `0x076`–`0x079` |
+| CB_Status3 ×16 (4 frames) | `0x067`–`0x06A` | `0x07A`–`0x07D` |
 
-Run data (4 frames per board): fault flags + status, stack/pack voltage, current + cell voltage extremes + temperature, SOC (permille, `base + 0x03`).
-
-Test data adds: all 16 cell voltages, temperatures, CB status, CUV/COV snapshots, coulomb counter data, SOC (permille, `base + 0x33`).
+Notes:
+- The FET status frame no longer carries `AlarmBits` — it's redundant with the `Alarm` field already in the status frame (`0x040`/`0x043`). `CB_Status1` was split out of that same combined frame into its own ID above.
+- Run data (4 frames per board): fault flags + status, stack/pack voltage, current + cell voltage extremes + temperature, SOC.
+- Test data adds: all 16 cell voltages, temperatures, CB status, CUV/COV snapshots, coulomb counter data, SOC.
 
 ### Fan control
 
