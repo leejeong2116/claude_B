@@ -82,7 +82,6 @@ IDs follow `datasheets/bms_can_id_spec.csv`, defined as `CANID_*` macros at the 
 | Current/cell voltage/temp — run data | `0x042` | `0x045` |
 | SOC — run data *(legacy)* | `0x503` | `0x603` |
 | Cell voltages ×16 (4 frames) | `0x046`–`0x049` | `0x04F`–`0x052` |
-| Raw voltages (Max/Min/Stack/Pack) *(legacy)* | `0x110` | `0x210` |
 | Stack/pack voltage — test data *(legacy)* | `0x111` | `0x211` |
 | Current detail (CC1/CC3/CB active cells) *(legacy)* | `0x112` | `0x212` |
 | Temperature frame 1 (TS1/FET/Int/CFETOFF) | `0x04A` | `0x053` |
@@ -94,7 +93,7 @@ IDs follow `datasheets/bms_can_id_spec.csv`, defined as `CANID_*` macros at the 
 | CB_Status1 | `0x05A` | `0x06D` |
 | Coulomb counter: accumulated charge int/frac | `0x04C` | `0x055` |
 | Coulomb counter: accumulated time/CC2 | `0x04D` | `0x056` |
-| Coulomb counter: CC3/voltage sum/reserved | `0x04E` | `0x057` |
+| Coulomb counter: CC3/voltage sum (6 bytes) | `0x04E` | `0x057` |
 | SOC — test data *(legacy)* | `0x133` | `0x233` |
 | CUV snapshot ×16 (4 frames) | `0x05B`–`0x05E` | `0x06E`–`0x071` |
 | COV snapshot ×16 (4 frames) | `0x05F`–`0x062` | `0x072`–`0x075` |
@@ -106,7 +105,8 @@ Notes:
 - Run data (4 frames per board): fault flags + status, stack/pack voltage, current + cell voltage extremes + temperature, SOC.
 - Test data adds: all 16 cell voltages, temperatures, CB status, CUV/COV snapshots, coulomb counter data, SOC.
 - TOP has no current-sense pins (SRP/SRN unused — see the BQ76972 pin-usage table in the WSC report), so `Pack_Current`/`CC1_Current`/`CC3_Current` are always sent as `0` in TOP's frames (`0x045`, `0x212`) — real current data only comes from BOT (`BMS_CURRENT_BOARD`).
-- The LD (Load Detect) pin is unused on both boards, so the last field of the CC3 coulomb-counter frame (`0x04E`/`0x057`) is always sent as `0` (reserved) instead of `LD_Voltage_Raw`.
+- The LD (Load Detect) pin is unused on both boards, so `LD_Voltage_Raw` is no longer transmitted at all: the CC3 coulomb-counter frame (`0x04E`/`0x057`) was shrunk from 8 to 6 bytes (`bms_can_send_len()`, a DLC-parameterized variant of `bms_can_send()`) instead of zero-filling the field.
+- The legacy `0x110`/`0x210` (raw Stack/Pack voltage) frame was removed entirely — it duplicated the already-scaled (mV) `Stack_Voltage`/`Pack_Voltage` sent in both the run-data (`0x041`/`0x044`) and legacy test-data (`0x111`/`0x211`) voltage frames.
 
 ### Fan control
 
