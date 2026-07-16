@@ -73,14 +73,9 @@ BQ769x2 has three command types used throughout the driver:
 
 All CAN frames are 8-byte standard-ID. Byte order is **big-endian** in CAN frames (unlike the little-endian BQ register reads).
 
-| Board | Run data base ID | Test/diagnostic base ID |
-|---|---|---|
-| BOT | 0x500 | 0x100 |
-| TOP | 0x600 | 0x200 |
+Most frame IDs follow the 2026-07-16 CAN ID spreadsheet (`datasheets/bms can.xlsx`) rather than a single per-board base offset — see the `CANID_*` macros at the top of `B_TEST_BMS_can.c` for the full list (e.g. status/voltage/current run-data frames are `0x040`-`0x042` for BOT / `0x043`-`0x045` for TOP; cell-voltage, temperature, coulomb-counter, CUV/COV, and CB-status test-data frames are `0x046`-`0x06A` for BOT / `0x04F`-`0x07D` for TOP).
 
-Run data (4 frames per board): fault flags + status, stack/pack voltage, current + cell voltage extremes + temperature, SOC (permille, `base + 0x03`).
-
-Test data adds: all 16 cell voltages, temperatures, CB status, CUV/COV snapshots, coulomb counter data, SOC (permille, `base + 0x33`).
+A handful of frames are **not** in that spreadsheet and still use the legacy `base + offset` scheme (`base_id(board_type, 0x100U, 0x200U)` for test data, `0x500U`/`0x600U` for run data): the run-data SOC frame (`base + 0x03`), the test-data SOC frame (`base + 0x33`), three redundant test-data frames that duplicate run-data content (`base + 0x10/0x11/0x12`, `base + 0x20`), and the combined FET/CB_Status1/Alarm frame (`base + 0x23`, since the spreadsheet only gives `CB_Status1` alone a new ID and doesn't cover the rest of that frame's fields). These need clarification before they can be remapped.
 
 ### Fan control
 
