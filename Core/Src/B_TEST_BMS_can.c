@@ -160,7 +160,10 @@ void BMS_CAN_SendRunData(uint8_t board_type)
     put_u32_be(BMS_TxData, 4, unit->Pack_Voltage);
     bms_can_send(pick_id(board_type, CANID_VOLTAGE_BOT, CANID_VOLTAGE_TOP), BMS_TxData);
 
-    put_i16_be(BMS_TxData, 0, current_unit->Pack_Current);
+    /* TOP has no current-sense pins (SRP/SRN unused per the WSC pin-usage
+     * table) - Pack_Current is only meaningful on BOT, so don't duplicate
+     * BOT's value under TOP's ID. */
+    put_i16_be(BMS_TxData, 0, (board_type == BOT) ? current_unit->Pack_Current : 0);
     put_u16_be(BMS_TxData, 2, unit->MaxCellVolatge);
     put_u16_be(BMS_TxData, 4, unit->MinCellVolatge);
     put_i16_be(BMS_TxData, 6, temp_to_deci_c(unit->CELL_Temp));
@@ -195,9 +198,13 @@ void BMS_CAN_SendTestData(uint8_t board_type)
     put_u32_be(BMS_TxData, 4, unit->Pack_Voltage);
     bms_can_send(pick_id(board_type, CANID_STACKPACKV_TEST_BOT, CANID_STACKPACKV_TEST_TOP), BMS_TxData);
 
-    put_i16_be(BMS_TxData, 0, current_unit->Pack_Current);
-    put_i16_be(BMS_TxData, 2, current_unit->CC1_Current);
-    put_i16_be(BMS_TxData, 4, current_unit->CC3_Current);
+    /* Same reasoning as the run-data current frame above: TOP has no
+     * current-sense pins wired, so its current fields would just be a
+     * duplicate of BOT's data. CB_ActiveCells is still per-board and valid
+     * for TOP. */
+    put_i16_be(BMS_TxData, 0, (board_type == BOT) ? current_unit->Pack_Current : 0);
+    put_i16_be(BMS_TxData, 2, (board_type == BOT) ? current_unit->CC1_Current : 0);
+    put_i16_be(BMS_TxData, 4, (board_type == BOT) ? current_unit->CC3_Current : 0);
     put_u16_be(BMS_TxData, 6, unit->CB_ActiveCells);
     bms_can_send(pick_id(board_type, CANID_CURRENT_DETAIL_BOT, CANID_CURRENT_DETAIL_TOP), BMS_TxData);
 
@@ -265,9 +272,11 @@ void BMS_CAN_SendTestData(uint8_t board_type)
     put_u32_be(BMS_TxData, 4, (uint32_t)current_unit->CC2_Counts);
     bms_can_send(pick_id(board_type, CANID_COULOMB2_BOT, CANID_COULOMB2_TOP), BMS_TxData);
 
+    /* LD pin is unused on both boards (WSC pin-usage table), so
+     * LD_Voltage_Raw is an unconnected/meaningless reading - don't send it. */
     put_u32_be(BMS_TxData, 0, (uint32_t)current_unit->CC3_Counts);
     put_u16_be(BMS_TxData, 4, unit->Battery_Voltage_Sum);
-    put_u16_be(BMS_TxData, 6, unit->LD_Voltage_Raw);
+    put_u16_be(BMS_TxData, 6, 0);
     bms_can_send(pick_id(board_type, CANID_COULOMB3_BOT, CANID_COULOMB3_TOP), BMS_TxData);
 
     put_u16_be(BMS_TxData, 0, current_unit->SOC_Permille);

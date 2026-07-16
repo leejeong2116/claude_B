@@ -4,7 +4,7 @@ PRIMARY,0x043,TOP,"Global_Fault(u32), BattStat(u16), Alarm(u16)",BOT 0x040과 �
 PRIMARY,0x041,BOT,"Stack_Voltage(u32,mV), Pack_Voltage(u32,mV)",셀 스택 전체 전압과 팩 출력단 전압 (run data)
 PRIMARY,0x044,TOP,"Stack_Voltage(u32,mV), Pack_Voltage(u32,mV)",BOT 0x041과 동일 구조 (run data)
 PRIMARY,0x042,BOT,"Pack_Current(i16), MaxCellVoltage(u16,mV), MinCellVoltage(u16,mV), CellTemp(i16,0.1C)",팩 충방전 전류/셀 전압 최대·최소/대표 셀 온도 (run data)
-PRIMARY,0x045,TOP,"Pack_Current(i16), MaxCellVoltage(u16,mV), MinCellVoltage(u16,mV), CellTemp(i16,0.1C)",BOT 0x042과 동일 구조 (run data)
+PRIMARY,0x045,TOP,"Pack_Current(i16, always 0), MaxCellVoltage(u16,mV), MinCellVoltage(u16,mV), CellTemp(i16,0.1C)",TOP은 전류감지 핀(SRP/SRN) 미사용이라 Pack_Current는 항상 0 - 나머지는 BOT 0x042과 동일 구조 (run data)
 LEGACY,0x503,BOT,SOC(u16 permille),run data SOC 프레임 - 스프레드시트에 매칭 항목 없어 기존 ID 유지
 LEGACY,0x603,TOP,SOC(u16 permille),run data SOC 프레임 - 스프레드시트에 매칭 항목 없어 기존 ID 유지
 DETAIL(셀전압),0x046-0x049,BOT,Cell[0..15] 전압 (u16x4/frame,mV),개별 셀 16개 전압 (4프레임)
@@ -14,7 +14,7 @@ LEGACY,0x210,TOP,"MaxCellVoltage, MinCellVoltage, Stack_Voltage_Raw, Pack_Voltag
 LEGACY,0x111,BOT,"Stack_Voltage(u32,mV), Pack_Voltage(u32,mV)",run data 전압 프레임과 중복 - 스프레드시트에 매칭 항목 없어 기존 ID 유지
 LEGACY,0x211,TOP,"Stack_Voltage(u32,mV), Pack_Voltage(u32,mV)",run data 전압 프레임과 중복 - 스프레드시트에 매칭 항목 없어 기존 ID 유지
 LEGACY,0x112,BOT,"Pack_Current(i16), CC1_Current(i16), CC3_Current(i16), CB_ActiveCells(u16)",스프레드시트에 매칭 항목 없어 기존 ID 유지
-LEGACY,0x212,TOP,"Pack_Current(i16), CC1_Current(i16), CC3_Current(i16), CB_ActiveCells(u16)",스프레드시트에 매칭 항목 없어 기존 ID 유지
+LEGACY,0x212,TOP,"Pack_Current(i16, always 0), CC1_Current(i16, always 0), CC3_Current(i16, always 0), CB_ActiveCells(u16)",TOP은 전류감지 핀(SRP/SRN) 미사용이라 전류 필드는 항상 0 - CB_ActiveCells만 유효. 스프레드시트에 매칭 항목 없어 기존 ID 유지
 DETAIL(온도),0x04A,BOT,"CellTemp(TS1), FETTemp, IntTemp, CFETOFFTemp (i16x4,0.1C)",서미스터별 온도: 대표 셀/FET/내부(IC)/충전FET 차단
 DETAIL(온도),0x053,TOP,"CellTemp(TS1), FETTemp, IntTemp, CFETOFFTemp (i16x4,0.1C)",BOT 0x04A와 동일 구조
 DETAIL(온도),0x04B,BOT,"HDQTemp, MaxCellTemp, MinCellTemp, AvgCellTemp (i16x4,0.1C)",HDQ 핀 온도와 셀 온도 최대/최소/평균
@@ -33,8 +33,8 @@ DETAIL(쿨롱),0x04C,BOT,"AccumChargeInt(i32), AccumChargeFrac(u32)",누적 충�
 DETAIL(쿨롱),0x055,TOP,"AccumChargeInt(i32), AccumChargeFrac(u32)",BOT 0x04C와 동일 구조
 DETAIL(쿨롱),0x04D,BOT,"AccumChargeTime(u32), CC2Counts(i32)",누적 충전 시간과 2차 쿨롱 카운터 값
 DETAIL(쿨롱),0x056,TOP,"AccumChargeTime(u32), CC2Counts(i32)",BOT 0x04D와 동일 구조
-DETAIL(쿨롱),0x04E,BOT,"CC3Counts(i32), BattVoltageSum(u16), LDVoltageRaw(u16)",3차 쿨롱 카운터/셀 전압 합산값/Load-Detect 전압 raw값
-DETAIL(쿨롱),0x057,TOP,"CC3Counts(i32), BattVoltageSum(u16), LDVoltageRaw(u16)",BOT 0x04E와 동일 구조
+DETAIL(쿨롱),0x04E,BOT,"CC3Counts(i32), BattVoltageSum(u16), Reserved(u16, always 0)",3차 쿨롱 카운터/셀 전압 합산값 - LD 핀은 BOT/TOP 둘 다 미사용이라 LDVoltageRaw 필드는 항상 0
+DETAIL(쿨롱),0x057,TOP,"CC3Counts(i32), BattVoltageSum(u16), Reserved(u16, always 0)",BOT 0x04E와 동일 구조
 LEGACY,0x133,BOT,SOC(u16 permille),test data SOC 프레임 - 스프레드시트에 매칭 항목 없어 기존 ID 유지
 LEGACY,0x233,TOP,SOC(u16 permille),test data SOC 프레임 - 스프레드시트에 매칭 항목 없어 기존 ID 유지
 SD_ONLY(CUV),0x05B-0x05E,BOT,CUV(저전압) 스냅샷[0..15] (u16x4/frame,mV),저전압 보호 발동 시점의 셀별 전압 스냅샷 (4프레임)
