@@ -160,7 +160,8 @@ void BMS_CAN_SendRunData(uint8_t board_type)
     put_u32_be(BMS_TxData, 4, unit->Pack_Voltage);
     bms_can_send(pick_id(board_type, CANID_VOLTAGE_BOT, CANID_VOLTAGE_TOP), BMS_TxData);
 
-    put_i16_be(BMS_TxData, 0, current_unit->Pack_Current);
+    /* TOP has no current-sense pins (SRP/SRN unused per WSC pin-usage table); send 0 instead of BOT's reading */
+    put_i16_be(BMS_TxData, 0, (board_type == BOT) ? current_unit->Pack_Current : 0);
     put_u16_be(BMS_TxData, 2, unit->MaxCellVolatge);
     put_u16_be(BMS_TxData, 4, unit->MinCellVolatge);
     put_i16_be(BMS_TxData, 6, temp_to_deci_c(unit->CELL_Temp));
@@ -195,9 +196,10 @@ void BMS_CAN_SendTestData(uint8_t board_type)
     put_u32_be(BMS_TxData, 4, unit->Pack_Voltage);
     bms_can_send(pick_id(board_type, CANID_STACKPACKV_TEST_BOT, CANID_STACKPACKV_TEST_TOP), BMS_TxData);
 
-    put_i16_be(BMS_TxData, 0, current_unit->Pack_Current);
-    put_i16_be(BMS_TxData, 2, current_unit->CC1_Current);
-    put_i16_be(BMS_TxData, 4, current_unit->CC3_Current);
+    /* TOP has no current-sense pins (SRP/SRN unused per WSC pin-usage table); send 0 instead of BOT's reading */
+    put_i16_be(BMS_TxData, 0, (board_type == BOT) ? current_unit->Pack_Current : 0);
+    put_i16_be(BMS_TxData, 2, (board_type == BOT) ? current_unit->CC1_Current : 0);
+    put_i16_be(BMS_TxData, 4, (board_type == BOT) ? current_unit->CC3_Current : 0);
     put_u16_be(BMS_TxData, 6, unit->CB_ActiveCells);
     bms_can_send(pick_id(board_type, CANID_CURRENT_DETAIL_BOT, CANID_CURRENT_DETAIL_TOP), BMS_TxData);
 
@@ -267,7 +269,7 @@ void BMS_CAN_SendTestData(uint8_t board_type)
 
     put_u32_be(BMS_TxData, 0, (uint32_t)current_unit->CC3_Counts);
     put_u16_be(BMS_TxData, 4, unit->Battery_Voltage_Sum);
-    put_u16_be(BMS_TxData, 6, unit->LD_Voltage_Raw);
+    put_u16_be(BMS_TxData, 6, 0); /* LD pin unused on both boards per WSC pin-usage table */
     bms_can_send(pick_id(board_type, CANID_COULOMB3_BOT, CANID_COULOMB3_TOP), BMS_TxData);
 
     put_u16_be(BMS_TxData, 0, current_unit->SOC_Permille);

@@ -94,7 +94,7 @@ IDs follow `datasheets/bms_can_id_spec.csv`, defined as `CANID_*` macros at the 
 | CB_Status1 | `0x05A` | `0x06D` |
 | Coulomb counter: accumulated charge int/frac | `0x04C` | `0x055` |
 | Coulomb counter: accumulated time/CC2 | `0x04D` | `0x056` |
-| Coulomb counter: CC3/voltage sum/LD voltage | `0x04E` | `0x057` |
+| Coulomb counter: CC3/voltage sum/reserved | `0x04E` | `0x057` |
 | SOC — test data *(legacy)* | `0x133` | `0x233` |
 | CUV snapshot ×16 (4 frames) | `0x05B`–`0x05E` | `0x06E`–`0x071` |
 | COV snapshot ×16 (4 frames) | `0x05F`–`0x062` | `0x072`–`0x075` |
@@ -105,6 +105,8 @@ Notes:
 - The FET status frame no longer carries `AlarmBits` — it's redundant with the `Alarm` field already in the status frame (`0x040`/`0x043`). `CB_Status1` was split out of that same combined frame into its own ID above.
 - Run data (4 frames per board): fault flags + status, stack/pack voltage, current + cell voltage extremes + temperature, SOC.
 - Test data adds: all 16 cell voltages, temperatures, CB status, CUV/COV snapshots, coulomb counter data, SOC.
+- TOP has no current-sense pins (SRP/SRN unused — see the BQ76972 pin-usage table in the WSC report), so `Pack_Current`/`CC1_Current`/`CC3_Current` are always sent as `0` in TOP's frames (`0x045`, `0x212`) — real current data only comes from BOT (`BMS_CURRENT_BOARD`).
+- The LD (Load Detect) pin is unused on both boards, so the last field of the CC3 coulomb-counter frame (`0x04E`/`0x057`) is always sent as `0` (reserved) instead of `LD_Voltage_Raw`.
 
 ### Fan control
 
