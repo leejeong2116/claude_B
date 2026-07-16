@@ -29,7 +29,8 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 1
-
+      - name: Install poppler-utils (for PDF reading)
+        run: sudo apt-get update && sudo apt-get install -y poppler-utils
       - name: Run Claude Code
         id: claude
         uses: anthropics/claude-code-action@v1
