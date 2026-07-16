@@ -9,8 +9,6 @@ LEGACY,0x503,BOT,SOC(u16 permille),run data SOC 프레임 - 스프레드시트�
 LEGACY,0x603,TOP,SOC(u16 permille),run data SOC 프레임 - 스프레드시트에 매칭 항목 없어 기존 ID 유지
 DETAIL(셀전압),0x046-0x049,BOT,Cell[0..15] 전압 (u16x4/frame,mV),개별 셀 16개 전압 (4프레임)
 DETAIL(셀전압),0x04F-0x052,TOP,Cell[0..15] 전압 (u16x4/frame,mV),개별 셀 16개 전압 (4프레임)
-LEGACY,0x110,BOT,"MaxCellVoltage, MinCellVoltage, Stack_Voltage_Raw, Pack_Voltage_Raw (u16x4,mV)",run data 전압 프레임과 중복 - 스프레드시트에 매칭 항목 없어 기존 ID 유지
-LEGACY,0x210,TOP,"MaxCellVoltage, MinCellVoltage, Stack_Voltage_Raw, Pack_Voltage_Raw (u16x4,mV)",run data 전압 프레임과 중복 - 스프레드시트에 매칭 항목 없어 기존 ID 유지
 LEGACY,0x111,BOT,"Stack_Voltage(u32,mV), Pack_Voltage(u32,mV)",run data 전압 프레임과 중복 - 스프레드시트에 매칭 항목 없어 기존 ID 유지
 LEGACY,0x211,TOP,"Stack_Voltage(u32,mV), Pack_Voltage(u32,mV)",run data 전압 프레임과 중복 - 스프레드시트에 매칭 항목 없어 기존 ID 유지
 LEGACY,0x112,BOT,"Pack_Current(i16), CC1_Current(i16), CC3_Current(i16), CB_ActiveCells(u16)",스프레드시트에 매칭 항목 없어 기존 ID 유지
@@ -33,8 +31,8 @@ DETAIL(쿨롱),0x04C,BOT,"AccumChargeInt(i32), AccumChargeFrac(u32)",누적 충�
 DETAIL(쿨롱),0x055,TOP,"AccumChargeInt(i32), AccumChargeFrac(u32)",BOT 0x04C와 동일 구조
 DETAIL(쿨롱),0x04D,BOT,"AccumChargeTime(u32), CC2Counts(i32)",누적 충전 시간과 2차 쿨롱 카운터 값
 DETAIL(쿨롱),0x056,TOP,"AccumChargeTime(u32), CC2Counts(i32)",BOT 0x04D와 동일 구조
-DETAIL(쿨롱),0x04E,BOT,"CC3Counts(i32), BattVoltageSum(u16), LDVoltageRaw(u16)",3차 쿨롱 카운터/셀 전압 합산값/Load-Detect 전압 raw값
-DETAIL(쿨롱),0x057,TOP,"CC3Counts(i32), BattVoltageSum(u16), LDVoltageRaw(u16)",BOT 0x04E와 동일 구조
+DETAIL(쿨롱),0x04E,BOT,"CC3Counts(i32), BattVoltageSum(u16) - 6 bytes",3차 쿨롱 카운터/셀 전압 합산값. LD(Load Detect) 핀 미배선이라 LDVoltageRaw는 프레임에서 제거(8→6바이트)
+DETAIL(쿨롱),0x057,TOP,"CC3Counts(i32), BattVoltageSum(u16) - 6 bytes",BOT 0x04E와 동일 구조
 LEGACY,0x133,BOT,SOC(u16 permille),test data SOC 프레임 - 스프레드시트에 매칭 항목 없어 기존 ID 유지
 LEGACY,0x233,TOP,SOC(u16 permille),test data SOC 프레임 - 스프레드시트에 매칭 항목 없어 기존 ID 유지
 SD_ONLY(CUV),0x05B-0x05E,BOT,CUV(저전압) 스냅샷[0..15] (u16x4/frame,mV),저전압 보호 발동 시점의 셀별 전압 스냅샷 (4프레임)

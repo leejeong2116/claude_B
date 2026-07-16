@@ -23,8 +23,6 @@
 
 #define CANID_CELLV_BASE_BOT        0x046U /* 4 frames: 0x046-0x049 */
 #define CANID_CELLV_BASE_TOP        0x04FU /* 4 frames: 0x04F-0x052 */
-#define CANID_RAWV_BOT              0x110U /* legacy: duplicate of run-data voltage frame */
-#define CANID_RAWV_TOP              0x210U /* legacy */
 #define CANID_STACKPACKV_TEST_BOT   0x111U /* legacy: duplicate of run-data voltage frame */
 #define CANID_STACKPACKV_TEST_TOP   0x211U /* legacy */
 #define CANID_CURRENT_DETAIL_BOT    0x112U /* legacy: CC1/CC3 current + CB active-cell count */
@@ -97,12 +95,12 @@ static int16_t temp_to_deci_c(float temp_c)
     return (int16_t)(temp_c * 10.0f);
 }
 
-static void bms_can_prepare_header(uint32_t identifier)
+static void bms_can_prepare_header(uint32_t identifier, uint32_t dlc)
 {
     BMS_TxHeader.Identifier = identifier;
     BMS_TxHeader.IdType = FDCAN_STANDARD_ID;
     BMS_TxHeader.TxFrameType = FDCAN_DATA_FRAME;
-    BMS_TxHeader.DataLength = FDCAN_DLC_BYTES_8;
+    BMS_TxHeader.DataLength = dlc;
     BMS_TxHeader.ErrorStateIndicator = FDCAN_ESI_ACTIVE;
     BMS_TxHeader.BitRateSwitch = FDCAN_BRS_OFF;
     BMS_TxHeader.FDFormat = FDCAN_CLASSIC_CAN;
@@ -112,9 +110,9 @@ static void bms_can_prepare_header(uint32_t identifier)
 
 #define BMS_CAN_TX_TIMEOUT_MS 5U
 
-static void bms_can_send(uint32_t identifier, const uint8_t data[8])
+static void bms_can_send_len(uint32_t identifier, const uint8_t *data, uint32_t dlc)
 {
-    bms_can_prepare_header(identifier);
+    bms_can_prepare_header(identifier, dlc);
 
     uint32_t start = HAL_GetTick();
     while (HAL_FDCAN_GetTxFifoFreeLevel(&hfdcan1) == 0) {
@@ -125,6 +123,11 @@ static void bms_can_send(uint32_t identifier, const uint8_t data[8])
     }
 
     HAL_FDCAN_AddMessageToTxFifoQ(&hfdcan1, &BMS_TxHeader, (uint8_t *)data);
+}
+
+static void bms_can_send(uint32_t identifier, const uint8_t data[8])
+{
+    bms_can_send_len(identifier, data, FDCAN_DLC_BYTES_8);
 }
 
 static uint32_t pick_id(uint8_t board_type, uint32_t bot_id, uint32_t top_id)
@@ -184,12 +187,6 @@ void BMS_CAN_SendTestData(uint8_t board_type)
     BMS_Unit *fet_unit = &BMS[TOP];
 
     send_u16_array(pick_id(board_type, CANID_CELLV_BASE_BOT, CANID_CELLV_BASE_TOP), unit->CellVoltage);
-
-    put_u16_be(BMS_TxData, 0, unit->MaxCellVolatge);
-    put_u16_be(BMS_TxData, 2, unit->MinCellVolatge);
-    put_u16_be(BMS_TxData, 4, unit->Stack_Voltage_Raw);
-    put_u16_be(BMS_TxData, 6, unit->Pack_Voltage_Raw);
-    bms_can_send(pick_id(board_type, CANID_RAWV_BOT, CANID_RAWV_TOP), BMS_TxData);
 
     put_u32_be(BMS_TxData, 0, unit->Stack_Voltage);
     put_u32_be(BMS_TxData, 4, unit->Pack_Voltage);
@@ -265,10 +262,11 @@ void BMS_CAN_SendTestData(uint8_t board_type)
     put_u32_be(BMS_TxData, 4, (uint32_t)current_unit->CC2_Counts);
     bms_can_send(pick_id(board_type, CANID_COULOMB2_BOT, CANID_COULOMB2_TOP), BMS_TxData);
 
+    /* LD pin is unwired on both boards (see WSC pin-usage table), so LD_Voltage_Raw
+     * is dropped rather than sent as a meaningless reading - frame shrinks to 6 bytes. */
     put_u32_be(BMS_TxData, 0, (uint32_t)current_unit->CC3_Counts);
     put_u16_be(BMS_TxData, 4, unit->Battery_Voltage_Sum);
-    put_u16_be(BMS_TxData, 6, unit->LD_Voltage_Raw);
-    bms_can_send(pick_id(board_type, CANID_COULOMB3_BOT, CANID_COULOMB3_TOP), BMS_TxData);
+    bms_can_send_len(pick_id(board_type, CANID_COULOMB3_BOT, CANID_COULOMB3_TOP), BMS_TxData, FDCAN_DLC_BYTES_6);
 
     put_u16_be(BMS_TxData, 0, current_unit->SOC_Permille);
     put_u16_be(BMS_TxData, 2, 0);

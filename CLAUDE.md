@@ -71,7 +71,7 @@ BQ769x2 has three command types used throughout the driver:
 
 ### CAN telemetry (FDCAN1, Classic CAN)
 
-All CAN frames are 8-byte standard-ID. Byte order is **big-endian** in CAN frames (unlike the little-endian BQ register reads).
+All CAN frames are 8-byte standard-ID, except the coulomb counter 3 frame (`0x04E`/`0x057`), which is 6 bytes. Byte order is **big-endian** in CAN frames (unlike the little-endian BQ register reads).
 
 IDs follow `datasheets/bms_can_id_spec.csv`, defined as `CANID_*` macros at the top of `B_TEST_BMS_can.c`. Frames with no matching entry in that spreadsheet keep their legacy `base + offset` address (BOT test-data base `0x100`, TOP test-data base `0x200`) until a new ID is assigned — these are commented `/* legacy */` in the source.
 
@@ -82,7 +82,6 @@ IDs follow `datasheets/bms_can_id_spec.csv`, defined as `CANID_*` macros at the 
 | Current/cell voltage/temp — run data | `0x042` | `0x045` |
 | SOC — run data *(legacy)* | `0x503` | `0x603` |
 | Cell voltages ×16 (4 frames) | `0x046`–`0x049` | `0x04F`–`0x052` |
-| Raw voltages (Max/Min/Stack/Pack) *(legacy)* | `0x110` | `0x210` |
 | Stack/pack voltage — test data *(legacy)* | `0x111` | `0x211` |
 | Current detail (CC1/CC3/CB active cells) *(legacy)* | `0x112` | `0x212` |
 | Temperature frame 1 (TS1/FET/Int/CFETOFF) | `0x04A` | `0x053` |
@@ -94,7 +93,7 @@ IDs follow `datasheets/bms_can_id_spec.csv`, defined as `CANID_*` macros at the 
 | CB_Status1 | `0x05A` | `0x06D` |
 | Coulomb counter: accumulated charge int/frac | `0x04C` | `0x055` |
 | Coulomb counter: accumulated time/CC2 | `0x04D` | `0x056` |
-| Coulomb counter: CC3/voltage sum/LD voltage | `0x04E` | `0x057` |
+| Coulomb counter: CC3/voltage sum *(6 bytes)* | `0x04E` | `0x057` |
 | SOC — test data *(legacy)* | `0x133` | `0x233` |
 | CUV snapshot ×16 (4 frames) | `0x05B`–`0x05E` | `0x06E`–`0x071` |
 | COV snapshot ×16 (4 frames) | `0x05F`–`0x062` | `0x072`–`0x075` |
@@ -103,6 +102,8 @@ IDs follow `datasheets/bms_can_id_spec.csv`, defined as `CANID_*` macros at the 
 
 Notes:
 - The FET status frame no longer carries `AlarmBits` — it's redundant with the `Alarm` field already in the status frame (`0x040`/`0x043`). `CB_Status1` was split out of that same combined frame into its own ID above.
+- The legacy raw-voltage frame (`0x110`/`0x210`, `Stack_Voltage_Raw`/`Pack_Voltage_Raw`/Max/Min cell voltage) was removed — it duplicated data already sent, scaled, in the run-data voltage frame (`0x041`/`0x044`) and the legacy `0x111`/`0x211` test-data frame.
+- The coulomb counter 3 frame (`0x04E`/`0x057`) no longer carries `LD_Voltage_Raw` — the LD (Load Detect) pin is unwired on both boards, so the reading is meaningless. The frame shrank from 8 to 6 bytes (`FDCAN_DLC_BYTES_6`) instead of zero-filling.
 - Run data (4 frames per board): fault flags + status, stack/pack voltage, current + cell voltage extremes + temperature, SOC.
 - Test data adds: all 16 cell voltages, temperatures, CB status, CUV/COV snapshots, coulomb counter data, SOC.
 
