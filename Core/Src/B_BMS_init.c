@@ -10,10 +10,6 @@
 
 void BQ769x2_Init(BMS_Unit* unit)
 {
-	if(unit == &BMS[TOP]){
-
-	}
-	else{
 	CommandSubcommands(unit, SET_CFGUPDATE);
 
 // ##################################################################################################################################################
@@ -272,6 +268,5 @@ void BQ769x2_Init(BMS_Unit* unit)
 	BQ769x2_SetRegister(unit, CapacityGain, 0x4AAC3920, 4); //[ CCGain(18.921) * 298261.6178 = 5,643,408 ->0x4AAC3920 (이전 0x50282FC9는 약 113억으로 max 4.19억 초과)]
 
 	CommandSubcommands(unit, EXIT_CFGUPDATE); // Exit CONFIGUPDATE mode  - Subcommand 0x0092
-	}
 }
 

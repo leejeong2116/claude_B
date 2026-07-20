@@ -53,7 +53,7 @@ while(1):
 | File | Purpose |
 |---|---|
 | `B_BMS.c` | BQ769x2 I2C driver (read/write with CRC8), voltage/current/temp readback, fan control, protection status parsing |
-| `B_BMS_init.c` | One-time BQ769x2 register configuration (called from `BMS_MAIN_RUN`). **Only BOT is configured**; the `if(unit == &BMS[TOP])` block is intentionally empty — TOP uses default values |
+| `B_BMS_init.c` | One-time BQ769x2 register configuration (called from `BMS_MAIN_RUN`). TOP and BOT run the identical register-write sequence — there is no per-board branch |
 | `B_BMS_cmd.h` | All BQ769x2 data-memory register addresses and direct/subcommand codes |
 | `B_BMS_power_mode.c` | MCU and BQ sleep/wakeup sequencing: SLEEP → STOP1 (after 1 hr no load) → SHUTDOWN (after 3 days) |
 | `B_BMS_soc.c` | Pack SOC estimation: coulomb counting off the BQ769x2's CC2-based accumulated-charge integrator, re-anchored to an OCV lookup after long rest periods |
