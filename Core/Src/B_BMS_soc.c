@@ -68,18 +68,26 @@ static uint16_t lookup_ocv_permille(float ocv_mV)
 }
 
 // TOP/BOT 각 16셀 평균 전압을 다시 평균 -> 팩 내 셀 1개의 대표 전압(mV)
+// Battery_Voltage_Sum은 DASTATUS5()의 "userV" 단위 raw 값(TRM Table 12-23, p.119)이며
+// DAConfiguration[USER_VOLTS_CV]를 따른다(TRM Table 13-15) — Stack/Pack/LD Voltage와 동일한 근거.
+// TOP은 B_BMS_init.c에서 레지스터를 쓰지 않아 공장 기본값(0x05, USER_VOLTS_CV=1/센티볼트)이라 ×10이 필요하지만,
+// BOT은 B_BMS_init.c:46에서 DAConfiguration=0x02로 재설정되어 USER_VOLTS_CV=0(밀리볼트)이므로 이미 mV 단위,
+// ×10을 적용하면 안 됨 (Core/Src/B_BMS.c의 stack_userV_to_mV()와 동일한 TOP/BOT 스케일 차이).
 static float average_cell_voltage_mV(void)
 {
-    float top_avg = (float)BMS[TOP].Battery_Voltage_Sum / 16.0f;
+    float top_avg = ((float)BMS[TOP].Battery_Voltage_Sum * 10.0f) / 16.0f;
     float bot_avg = (float)BMS[BOT].Battery_Voltage_Sum / 16.0f;
 
     return (top_avg + bot_avg) / 2.0f;
 }
 
-// AccumulatedCharge_Int(mAh, 정수부) + Frac(mAh, 32비트 고정소수 분수부)를 mAh 실수값으로 변환
+// AccumulatedCharge_Int(정수부) + Frac(32비트 고정소수 분수부)는 DASTATUS6()의 userAh 단위 raw 값(TRM Table 4-6).
+// DAConfiguration=0x02로 USER_AMPS[1:0]=Centiamp(10mA)가 선택되어 있어(TRM Table 13-15, B_BMS_init.c:46)
+// 1 userAh = 10mAh이므로 ×10 스케일 필요
 static float accumulated_charge_mAh(const BMS_Unit *unit)
 {
-    return (float)unit->AccumulatedCharge_Int + ((float)unit->AccumulatedCharge_Frac / 4294967296.0f);
+    float raw_userAh = (float)unit->AccumulatedCharge_Int + ((float)unit->AccumulatedCharge_Frac / 4294967296.0f);
+    return raw_userAh * 10.0f;
 }
 
 void BMS_SOC_Init(void)

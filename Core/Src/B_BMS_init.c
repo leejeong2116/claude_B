@@ -36,7 +36,7 @@ void BQ769x2_Init(BMS_Unit* unit)
 	BQ769x2_SetRegister(unit, CommIdleTime, 0x00, 1); // NO clock stretch // 클락 스트레치: 통신에서 슬레이브가 처리 시간이 더 필요할 때 클럭을 잡아 마스터를 기다리게 하는 기능
 	BQ769x2_SetRegister(unit, CFETOFFPinConfig, 0x07, 1); //cell // 지금은 셀 온도/ 차후 조정
 	BQ769x2_SetRegister(unit, DFETOFFPinConfig, 0x6A, 1); //[Active high, BOTHOFF, NO week pull-up/pull-down, REG1]
-	BQ769x2_SetRegister(unit, ALERTPinConfig, 0xAA, 1); // [Active low, ALERT, NO week pull-up/pull-down]
+	BQ769x2_SetRegister(unit, ALERTPinConfig, 0x2A, 1); // [Active high, ALERT, NO week pull-up/pull-down] (rising-edge EXTI on ALERT assertion, see gpio.c GPIO_MODE_IT_RISING)
 	BQ769x2_SetRegister(unit, TS1Config, 0x07, 1); //cell // 지금은 셀 온도(셀, FET, 버스바/인터커넥트 설정가능)/ 차후 조정 / 18k
 	BQ769x2_SetRegister(unit, TS2Config, 0x00, 1); // OFF(Wake)
 	BQ769x2_SetRegister(unit, TS3Config, 0x07, 1); //cell // 지금은 셀 온도/ 차후 조정
@@ -177,7 +177,7 @@ void BQ769x2_Init(BMS_Unit* unit)
 	BQ769x2_SetRegister(unit, COVLRecoveryTime, 0x14, 1); // [20s] 실험 후 사용 안함
 	BQ769x2_SetRegister(unit, OCCThreshold, 0x0A, 1); // [20mV] // max charge current 10A -> 5p -> 50A ,shunt register 0.4m -> 50*0.4m = 20mV
 	BQ769x2_SetRegister(unit, OCCDelay, 0x7F, 1); // [419.1+6.6 = 425.7ms]
-	BQ769x2_SetRegister(unit, OCCRecoveryThreshold, 0xFC17, 2); // [-1A]
+	BQ769x2_SetRegister(unit, OCCRecoveryThreshold, 0xFC18, 2); // [-1A] = [65536-1000mA]
 	BQ769x2_SetRegister(unit, OCCPACKTOSDelta, 0x00C8, 2); // [2V = 200 × 10mV]
 	BQ769x2_SetRegister(unit, OCD1Threshold, 0x0D, 1); // 65 * 0.4m [26mV]
 	BQ769x2_SetRegister(unit, OCD1Delay, 0x7F, 1); // [419.1+6.6 = 425.7ms]
@@ -212,17 +212,17 @@ void BQ769x2_Init(BMS_Unit* unit)
 	BQ769x2_SetRegister(unit, UTCThreshold, 0x00, 1); // [0`C]
 	BQ769x2_SetRegister(unit, UTCDelay, 0x05, 1); // [5s]
 	BQ769x2_SetRegister(unit, UTCRecovery, 0x05, 1); // [5`C]
-	BQ769x2_SetRegister(unit, UTDThreshold, 0xEB, 1); // [-20`C]
+	BQ769x2_SetRegister(unit, UTDThreshold, 0xEC, 1); // [-20`C]
 	BQ769x2_SetRegister(unit, UTDDelay, 0x05, 1); // [5s]
-	BQ769x2_SetRegister(unit, UTDRecovery, 0xF0, 1); // [-15`C]
-	BQ769x2_SetRegister(unit, UTINTThreshold, 0xE1, 1); // [-30`C]
+	BQ769x2_SetRegister(unit, UTDRecovery, 0xF1, 1); // [-15`C]
+	BQ769x2_SetRegister(unit, UTINTThreshold, 0xE2, 1); // [-30`C]
 	BQ769x2_SetRegister(unit, UTINTDelay, 0x05, 1); // [5s]
-	BQ769x2_SetRegister(unit, UTINTRecovery, 0xE6, 1); // [-25`C]
+	BQ769x2_SetRegister(unit, UTINTRecovery, 0xE7, 1); // [-25`C]
 	BQ769x2_SetRegister(unit, ProtectionsRecoveryTime, 0x03, 1); // [3s]
 	BQ769x2_SetRegister(unit, HWDDelay, 0x003C, 2); // [60s = 1min]
 	BQ769x2_SetRegister(unit, LoadDetectActiveTime, 0x06, 1); // [6s]
 	BQ769x2_SetRegister(unit, LoadDetectRetryDelay, 0x32, 1); // [50s]
-	BQ769x2_SetRegister(unit, LoadDetectTimeout, 0x18, 1); // [24hrs]
+	BQ769x2_SetRegister(unit, LoadDetectTimeout, 0x0018, 2); // [24hrs] (U2 register, TRM Table 13.6.21.3)
 	BQ769x2_SetRegister(unit, PTOChargeThreshold, 0, 2);
 	BQ769x2_SetRegister(unit, PTODelay, 0, 2);
 	BQ769x2_SetRegister(unit, PTOReset, 0, 2); // 프리차지 없어서 비활성화
@@ -257,7 +257,7 @@ void BQ769x2_Init(BMS_Unit* unit)
 	BQ769x2_SetRegister(unit, VIMADelay, 0x05, 1); // [5s]
 	BQ769x2_SetRegister(unit, CFETFOFFThreshold, 0x0064, 2); // [0.1A]
 	BQ769x2_SetRegister(unit, CFETFOFFDelay, 0x05, 1); // [5s]
-	BQ769x2_SetRegister(unit, DFETFOFFThreshold, 0xFE0B, 2); // [-0.5A]
+	BQ769x2_SetRegister(unit, DFETFOFFThreshold, 0xFE0C, 2); // [-0.5A] = [65536-500mA]
 	BQ769x2_SetRegister(unit, DFETFOFFDelay, 0x05, 1); // [5S]
 	BQ769x2_SetRegister(unit, VSSFFailThreshold, 0x0064, 2); //[100]
 	BQ769x2_SetRegister(unit, VSSFDelay, 0x05, 1); // [5s]

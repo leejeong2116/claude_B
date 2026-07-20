@@ -567,6 +567,17 @@ uint32_t BQ769x2_ReadVoltage(BMS_Unit *unit, uint8_t command)
     return 10UL * (uint32_t)raw;
 }
 
+// StackVoltage(0x34)/PACKPinVoltage(0x36)/LDPinVoltage(0x38)는 TRM Direct Commands Table상 단위가
+// 고정 mV가 아니라 "userV"로, DAConfiguration[USER_VOLTS_CV]를 따른다(TRM Table 13-15).
+// TOP은 B_BMS_init.c의 BQ769x2_Init()에서 아무 레지스터도 쓰지 않아 공장 기본값 DAConfiguration=0x05
+// (USER_VOLTS_CV=1, Centivolt/10mV 단위)를 그대로 사용하므로 ×10 변환이 맞다.
+// BOT은 B_BMS_init.c에서 DAConfiguration=0x02로 재설정되어 USER_VOLTS_CV=0(Millivolt/1mV 단위)이므로
+// 이미 mV 단위이며 ×10을 적용하면 안 된다.
+static uint32_t stack_userV_to_mV(const BMS_Unit *unit, uint16_t raw)
+{
+    return (unit == &BMS[TOP]) ? (10UL * (uint32_t)raw) : (uint32_t)raw;
+}
+
 void BQ769x2_ReadAllVoltages(BMS_Unit *unit)
 {
     uint8_t command = Cell1Voltage;
@@ -578,15 +589,15 @@ void BQ769x2_ReadAllVoltages(BMS_Unit *unit)
 
     DirectCommands(unit, StackVoltage, 0x00, R);
     unit->Stack_Voltage_Raw = u16_le(unit->RX_data);
-    unit->Stack_Voltage = 10UL * (uint32_t)unit->Stack_Voltage_Raw;
+    unit->Stack_Voltage = stack_userV_to_mV(unit, unit->Stack_Voltage_Raw);
 
     DirectCommands(unit, PACKPinVoltage, 0x00, R);
     unit->Pack_Voltage_Raw = u16_le(unit->RX_data);
-    unit->Pack_Voltage = 10UL * (uint32_t)unit->Pack_Voltage_Raw;
+    unit->Pack_Voltage = stack_userV_to_mV(unit, unit->Pack_Voltage_Raw);
 
     DirectCommands(unit, LDPinVoltage, 0x00, R);
     unit->LD_Voltage_Raw = u16_le(unit->RX_data);
-    unit->LD_Voltage = 10UL * (uint32_t)unit->LD_Voltage_Raw;
+    unit->LD_Voltage = stack_userV_to_mV(unit, unit->LD_Voltage_Raw);
 }
 
 int16_t BQ769x2_ReadCurrent(BMS_Unit *unit)
