@@ -167,8 +167,10 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-    Handle_Wakeup_Event();
-    LV_BMS_WHILE_RUN();
+    bool already_ran_while_run = Handle_Wakeup_Event();
+    if (!already_ran_while_run) {
+      LV_BMS_WHILE_RUN();
+    }
     BMS_FanControl_Update();
     BMS_CAN_SendRunData(TOP);
     BMS_CAN_SendRunData(BOT);

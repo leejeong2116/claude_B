@@ -26,6 +26,6 @@ bool Is_No_Load(void);
 //void Configure_BMS_Normal_Mask(void);
 
 void Enter_Sleep_Sequence(void);
-void Handle_Wakeup_Event(void);
+bool Handle_Wakeup_Event(void);
 
 #endif /* INC_B_BMS_POWER_MODE_H_ */
