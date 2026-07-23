@@ -39,6 +39,12 @@ void Configure_BMS_Normal_Mask(void)
     DirectCommands(&BMS[BOT], AlarmEnable, 0xF882, W);
 }
 */
+// TODO(#27): elapsed_ms는 실측이 아니라 가정된 스캔 주기(BMS_SLEEP_SCAN_PERIOD_MS/BMS_NORMAL_SCAN_PERIOD_MS)다.
+// HAL_SuspendTick()이 매 저전력 진입 전 SysTick을 꺼서 HAL_GetTick()으로 실제 경과 시간을 잴 수 없고,
+// SLEEP/STOP1은 다음 인터럽트(주로 BQ ALERT)까지 무기한 블로킹되므로 실제 경과 시간이 이 상수와 전혀
+// 무관하게 짧아지거나 길어질 수 있다 — 즉 1시간/3일 임계값 도달 시점이 실제 시간과 어긋날 수 있음.
+// 올바른 수정은 STOP1을 관통해 계속 도는 RTC Wake-up Timer를 별도 주기적 웨이크 소스로 추가해
+// 그 틱에서만 이 함수를 호출하는 것 (RTC/.ioc 변경 필요 — 하드웨어에서 검증 후 구현할 것).
 static void Accumulate_No_Load_Time(uint32_t elapsed_ms)
 {
     if (no_load_time_ms <= (UINT32_MAX - elapsed_ms)) {
@@ -51,7 +57,10 @@ static void Accumulate_No_Load_Time(uint32_t elapsed_ms)
 
 void Enter_Sleep_Sequence(void)
 {
-    if (!Is_No_Load()) {
+    bool protections_triggered = (BMS[BOT].ProtectionsTriggered != 0U) ||
+                                  (BMS[TOP].ProtectionsTriggered != 0U);
+
+    if (!Is_No_Load() || protections_triggered) {
         no_load_time_ms = 0;
         // 부하가 있을 때도 루프 주기를 일정하게 유지 (I2C/CAN이 풀 스피드로 폭주하지 않도록)
         HAL_Delay(BMS_NORMAL_SCAN_PERIOD_MS);

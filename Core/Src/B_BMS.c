@@ -343,7 +343,7 @@ void CommandSubcommands(BMS_Unit *unit, uint16_t command)
     delayUS(2000);
 }
 
-void Subcommands(BMS_Unit *unit, uint16_t command, uint16_t data, uint8_t type)
+int Subcommands(BMS_Unit *unit, uint16_t command, uint16_t data, uint8_t type)
 {
     uint8_t TX_Reg[4] = {
         (uint8_t)(command & 0xffU),
@@ -352,11 +352,12 @@ void Subcommands(BMS_Unit *unit, uint16_t command, uint16_t data, uint8_t type)
         0
     };
     uint8_t TX_Buffer[2] = {0};
+    int result = 0;
 
     if (type == R) {
         I2C_WriteReg(unit, 0x3E, TX_Reg, 2);
         delayUS(2000);
-        I2C_ReadReg(unit, 0x40, unit->RX_SubData, 32);
+        result = I2C_ReadReg(unit, 0x40, unit->RX_SubData, 32);
     } else if (type == W) {
         TX_Reg[2] = (uint8_t)(data & 0xffU);
         I2C_WriteReg(unit, 0x3E, TX_Reg, 3);
@@ -375,20 +376,23 @@ void Subcommands(BMS_Unit *unit, uint16_t command, uint16_t data, uint8_t type)
         I2C_WriteReg(unit, 0x60, TX_Buffer, 2);
         delayUS(1000);
     }
+
+    return result;
 }
 
-void DirectCommands(BMS_Unit *unit, uint8_t command, uint16_t data, uint8_t type)
+int DirectCommands(BMS_Unit *unit, uint8_t command, uint16_t data, uint8_t type)
 {
     uint8_t TX_data[2] = {
         (uint8_t)(data & 0xffU),
         (uint8_t)((data >> 8) & 0xffU)
     };
+    int result = 0;
 
     if (type == R) {
-        I2C_ReadReg(unit, command, unit->RX_data, 2);
+        result = I2C_ReadReg(unit, command, unit->RX_data, 2);
         delayUS(2000);
     } else if (type == R1) {
-        I2C_ReadReg(unit, command, unit->RX_data, 1);
+        result = I2C_ReadReg(unit, command, unit->RX_data, 1);
         unit->RX_data[1] = 0;
         delayUS(2000);
     } else if (type == W) {
@@ -398,6 +402,8 @@ void DirectCommands(BMS_Unit *unit, uint8_t command, uint16_t data, uint8_t type
         I2C_WriteReg(unit, command, TX_data, 1);
         delayUS(2000);
     }
+
+    return result;
 }
 
 void BQ769x2_BOTHOFF(void)
@@ -416,11 +422,12 @@ void BQ769x2_ReadFETStatus(BMS_Unit *unit)
         return;
     }
 
-    DirectCommands(unit, FETStatus, 0x00, R1);
-    unit->FET_Status = unit->RX_data[0];
-    unit->CHG = (uint8_t)(unit->RX_data[0] & 0x01U);
-    unit->DSG = (uint8_t)((unit->RX_data[0] & 0x04U) >> 2);
-    unit->PDSG = (uint8_t)((unit->RX_data[0] & 0x08U) >> 3);
+    if (DirectCommands(unit, FETStatus, 0x00, R1) == 0) {
+        unit->FET_Status = unit->RX_data[0];
+        unit->CHG = (uint8_t)(unit->RX_data[0] & 0x01U);
+        unit->DSG = (uint8_t)((unit->RX_data[0] & 0x04U) >> 2);
+        unit->PDSG = (uint8_t)((unit->RX_data[0] & 0x08U) >> 3);
+    }
 }
 
 void BQ769x2_LOWV_SHUTDOWN(void)
@@ -450,24 +457,30 @@ void BQ769x2_Wake_Up(void)
     HAL_Delay(10);
 }
 
-uint16_t BQ769x2_ReadAlarmStatus(BMS_Unit *unit)
+uint16_t BQ769x2_ReadAlarmStatus(BMS_Unit *unit, int *ok)
 {
-    DirectCommands(unit, AlarmStatus, 0x00, R);
+    int result = DirectCommands(unit, AlarmStatus, 0x00, R);
+    if (ok != NULL) {
+        *ok = (result == 0) ? 1 : 0;
+    }
     return u16_le(unit->RX_data);
 }
 
 void BQ769x2_ReadAlarmRawStatus(BMS_Unit *unit)
 {
-    DirectCommands(unit, AlarmRawStatus, 0x00, R);
-    unit->AlarmRawBits = u16_le(unit->RX_data);
+    if (DirectCommands(unit, AlarmRawStatus, 0x00, R) == 0) {
+        unit->AlarmRawBits = u16_le(unit->RX_data);
+    }
 }
 
 void BQ769x2_ReadSafetyStatus(BMS_Unit *unit)
 {
-    DirectCommands(unit, SafetyStatusA, 0x00, R1);
-    unit->value_SafetyStatusA = unit->RX_data[0];
-    DirectCommands(unit, SafetyAlertA, 0x00, R1);
-    unit->value_SafetyAlertA = unit->RX_data[0];
+    if (DirectCommands(unit, SafetyStatusA, 0x00, R1) == 0) {
+        unit->value_SafetyStatusA = unit->RX_data[0];
+    }
+    if (DirectCommands(unit, SafetyAlertA, 0x00, R1) == 0) {
+        unit->value_SafetyAlertA = unit->RX_data[0];
+    }
 
     unit->CUV_Fault = (uint8_t)((unit->value_SafetyStatusA & 0x04U) >> 2);
     unit->COV_Fault = (uint8_t)((unit->value_SafetyStatusA & 0x08U) >> 3);
@@ -476,10 +489,12 @@ void BQ769x2_ReadSafetyStatus(BMS_Unit *unit)
     unit->OCD2_Fault = (uint8_t)((unit->value_SafetyStatusA & 0x40U) >> 6);
     unit->SCD_Fault = (uint8_t)((unit->value_SafetyStatusA & 0x80U) >> 7);
 
-    DirectCommands(unit, SafetyStatusB, 0x00, R1);
-    unit->value_SafetyStatusB = unit->RX_data[0];
-    DirectCommands(unit, SafetyAlertB, 0x00, R1);
-    unit->value_SafetyAlertB = unit->RX_data[0];
+    if (DirectCommands(unit, SafetyStatusB, 0x00, R1) == 0) {
+        unit->value_SafetyStatusB = unit->RX_data[0];
+    }
+    if (DirectCommands(unit, SafetyAlertB, 0x00, R1) == 0) {
+        unit->value_SafetyAlertB = unit->RX_data[0];
+    }
 
     unit->UTC_Fault = (uint8_t)(unit->value_SafetyStatusB & 0x01U);
     unit->UTD_Fault = (uint8_t)((unit->value_SafetyStatusB & 0x02U) >> 1);
@@ -489,10 +504,12 @@ void BQ769x2_ReadSafetyStatus(BMS_Unit *unit)
     unit->OTINT_Fault = (uint8_t)((unit->value_SafetyStatusB & 0x40U) >> 6);
     unit->OTF_Fault = (uint8_t)((unit->value_SafetyStatusB & 0x80U) >> 7);
 
-    DirectCommands(unit, SafetyStatusC, 0x00, R1);
-    unit->value_SafetyStatusC = unit->RX_data[0];
-    DirectCommands(unit, SafetyAlertC, 0x00, R1);
-    unit->value_SafetyAlertC = unit->RX_data[0];
+    if (DirectCommands(unit, SafetyStatusC, 0x00, R1) == 0) {
+        unit->value_SafetyStatusC = unit->RX_data[0];
+    }
+    if (DirectCommands(unit, SafetyAlertC, 0x00, R1) == 0) {
+        unit->value_SafetyAlertC = unit->RX_data[0];
+    }
 
     unit->HWDF_Fault = (uint8_t)((unit->value_SafetyStatusC & 0x02U) >> 1);
     unit->COVL_Fault = (uint8_t)((unit->value_SafetyStatusC & 0x10U) >> 4);
@@ -511,37 +528,46 @@ void BQ769x2_ReadSafetyStatus(BMS_Unit *unit)
 
 void BQ769x2_ReadBATTStatus(BMS_Unit *unit)
 {
-    DirectCommands(unit, BatteryStatus, 0x00, R);
-    unit->BattStat = u16_le(unit->RX_data);
+    if (DirectCommands(unit, BatteryStatus, 0x00, R) == 0) {
+        unit->BattStat = u16_le(unit->RX_data);
+    }
 }
 
 void BQ769x2_ReadPFStatus(BMS_Unit *unit)
 {
-    DirectCommands(unit, PFStatusA, 0x00, R1);
-    unit->value_PFStatusA = unit->RX_data[0];
-    DirectCommands(unit, PFAlertA, 0x00, R1);
-    unit->value_PFAlertA = unit->RX_data[0];
+    if (DirectCommands(unit, PFStatusA, 0x00, R1) == 0) {
+        unit->value_PFStatusA = unit->RX_data[0];
+    }
+    if (DirectCommands(unit, PFAlertA, 0x00, R1) == 0) {
+        unit->value_PFAlertA = unit->RX_data[0];
+    }
 
     unit->SUV_PF = (uint8_t)(unit->value_PFStatusA & 0x01U);
     unit->SOV_PF = (uint8_t)((unit->value_PFStatusA & 0x02U) >> 1);
 
-    DirectCommands(unit, PFStatusB, 0x00, R1);
-    unit->value_PFStatusB = unit->RX_data[0];
-    DirectCommands(unit, PFAlertB, 0x00, R1);
-    unit->value_PFAlertB = unit->RX_data[0];
+    if (DirectCommands(unit, PFStatusB, 0x00, R1) == 0) {
+        unit->value_PFStatusB = unit->RX_data[0];
+    }
+    if (DirectCommands(unit, PFAlertB, 0x00, R1) == 0) {
+        unit->value_PFAlertB = unit->RX_data[0];
+    }
 
     unit->VIMR_PF = (uint8_t)((unit->value_PFStatusB & 0x08U) >> 3);
     unit->VIMA_PF = (uint8_t)((unit->value_PFStatusB & 0x10U) >> 4);
 
-    DirectCommands(unit, PFStatusC, 0x00, R1);
-    unit->value_PFStatusC = unit->RX_data[0];
-    DirectCommands(unit, PFAlertC, 0x00, R1);
-    unit->value_PFAlertC = unit->RX_data[0];
+    if (DirectCommands(unit, PFStatusC, 0x00, R1) == 0) {
+        unit->value_PFStatusC = unit->RX_data[0];
+    }
+    if (DirectCommands(unit, PFAlertC, 0x00, R1) == 0) {
+        unit->value_PFAlertC = unit->RX_data[0];
+    }
 
-    DirectCommands(unit, PFStatusD, 0x00, R1);
-    unit->value_PFStatusD = unit->RX_data[0];
-    DirectCommands(unit, PFAlertD, 0x00, R1);
-    unit->value_PFAlertD = unit->RX_data[0];
+    if (DirectCommands(unit, PFStatusD, 0x00, R1) == 0) {
+        unit->value_PFStatusD = unit->RX_data[0];
+    }
+    if (DirectCommands(unit, PFAlertD, 0x00, R1) == 0) {
+        unit->value_PFAlertD = unit->RX_data[0];
+    }
 
     unit->PF_ProtectionsTriggered = (unit->value_PFStatusA ||
                                      unit->value_PFStatusB ||
@@ -553,11 +579,14 @@ void BQ769x2_ReadPFStatus(BMS_Unit *unit)
     }
 }
 
-uint32_t BQ769x2_ReadVoltage(BMS_Unit *unit, uint8_t command)
+uint32_t BQ769x2_ReadVoltage(BMS_Unit *unit, uint8_t command, int *ok)
 {
     uint16_t raw;
+    int result = DirectCommands(unit, command, 0x00, R);
 
-    DirectCommands(unit, command, 0x00, R);
+    if (ok != NULL) {
+        *ok = (result == 0) ? 1 : 0;
+    }
     raw = u16_le(unit->RX_data);
 
     if (command >= Cell1Voltage && command <= Cell16Voltage) {
@@ -569,67 +598,95 @@ uint32_t BQ769x2_ReadVoltage(BMS_Unit *unit, uint8_t command)
 
 // StackVoltage(0x34)/PACKPinVoltage(0x36)/LDPinVoltage(0x38)는 TRM Direct Commands Table상 단위가
 // 고정 mV가 아니라 "userV"로, DAConfiguration[USER_VOLTS_CV]를 따른다(TRM Table 13-15).
-// TOP은 B_BMS_init.c의 BQ769x2_Init()에서 아무 레지스터도 쓰지 않아 공장 기본값 DAConfiguration=0x05
-// (USER_VOLTS_CV=1, Centivolt/10mV 단위)를 그대로 사용하므로 ×10 변환이 맞다.
-// BOT은 B_BMS_init.c에서 DAConfiguration=0x02로 재설정되어 USER_VOLTS_CV=0(Millivolt/1mV 단위)이므로
-// 이미 mV 단위이며 ×10을 적용하면 안 된다.
-static uint32_t stack_userV_to_mV(const BMS_Unit *unit, uint16_t raw)
+// B_BMS_init.c의 BQ769x2_Init()은 TOP/BOT 분기 없이 동일한 시퀀스를 실행하며, DAConfiguration=0x02
+// (USER_VOLTS_CV=0, Millivolt/1mV 단위)를 양쪽 보드 모두에 무조건 쓴다(B_BMS_init.c:42). 따라서
+// TOP도 이미 mV 단위이며 ×10을 적용하면 안 된다. (issue #27 리뷰에서 발견된 TOP 전압 ×10 과대보고 버그 수정)
+static uint32_t stack_userV_to_mV(uint16_t raw)
 {
-    return (unit == &BMS[TOP]) ? (10UL * (uint32_t)raw) : (uint32_t)raw;
+    return (uint32_t)raw;
 }
 
 void BQ769x2_ReadAllVoltages(BMS_Unit *unit)
 {
     uint8_t command = Cell1Voltage;
+    int ok;
 
     for (int i = 0; i < 16; i++) {
-        unit->CellVoltage[i] = (uint16_t)BQ769x2_ReadVoltage(unit, command);
+        uint32_t cell_mV = BQ769x2_ReadVoltage(unit, command, &ok);
+        if (ok) {
+            unit->CellVoltage[i] = (uint16_t)cell_mV;
+        }
         command = (uint8_t)(command + 2U);
     }
 
-    DirectCommands(unit, StackVoltage, 0x00, R);
-    unit->Stack_Voltage_Raw = u16_le(unit->RX_data);
-    unit->Stack_Voltage = stack_userV_to_mV(unit, unit->Stack_Voltage_Raw);
+    if (DirectCommands(unit, StackVoltage, 0x00, R) == 0) {
+        unit->Stack_Voltage_Raw = u16_le(unit->RX_data);
+        unit->Stack_Voltage = stack_userV_to_mV(unit->Stack_Voltage_Raw);
+    }
 
-    DirectCommands(unit, PACKPinVoltage, 0x00, R);
-    unit->Pack_Voltage_Raw = u16_le(unit->RX_data);
-    unit->Pack_Voltage = stack_userV_to_mV(unit, unit->Pack_Voltage_Raw);
+    if (DirectCommands(unit, PACKPinVoltage, 0x00, R) == 0) {
+        unit->Pack_Voltage_Raw = u16_le(unit->RX_data);
+        unit->Pack_Voltage = stack_userV_to_mV(unit->Pack_Voltage_Raw);
+    }
 
-    DirectCommands(unit, LDPinVoltage, 0x00, R);
-    unit->LD_Voltage_Raw = u16_le(unit->RX_data);
-    unit->LD_Voltage = stack_userV_to_mV(unit, unit->LD_Voltage_Raw);
+    if (DirectCommands(unit, LDPinVoltage, 0x00, R) == 0) {
+        unit->LD_Voltage_Raw = u16_le(unit->RX_data);
+        unit->LD_Voltage = stack_userV_to_mV(unit->LD_Voltage_Raw);
+    }
 }
 
-int16_t BQ769x2_ReadCurrent(BMS_Unit *unit)
+int16_t BQ769x2_ReadCurrent(BMS_Unit *unit, int *ok)
 {
-    DirectCommands(unit, CC2Current, 0x00, R);
+    int result = DirectCommands(unit, CC2Current, 0x00, R);
+    if (ok != NULL) {
+        *ok = (result == 0) ? 1 : 0;
+    }
     return i16_le(unit->RX_data);
 }
 
-float BQ769x2_ReadTemperature(BMS_Unit *unit, uint8_t command)
+float BQ769x2_ReadTemperature(BMS_Unit *unit, uint8_t command, int *ok)
 {
-    DirectCommands(unit, command, 0x00, R);
+    int result = DirectCommands(unit, command, 0x00, R);
+    if (ok != NULL) {
+        *ok = (result == 0) ? 1 : 0;
+    }
     return temp_01k_to_c(u16_le(unit->RX_data));
 }
 
 void BQ769x2_ReadData(BMS_Unit *unit)
 {
-    unit->AlarmBits = BQ769x2_ReadAlarmStatus(unit);
+    int ok;
+    uint16_t alarm = BQ769x2_ReadAlarmStatus(unit, &ok);
+
+    if (ok) {
+        unit->AlarmBits = alarm;
+    }
 
     if (unit->AlarmBits & 0x0080U) {
         BQ769x2_ReadAllVoltages(unit);
         if (is_current_board(unit)) {
-            unit->Pack_Current = BQ769x2_ReadCurrent(unit);
+            int16_t current = BQ769x2_ReadCurrent(unit, &ok);
+            if (ok) {
+                unit->Pack_Current = current;
+            }
         }
-        unit->CELL_Temp = BQ769x2_ReadTemperature(unit, TS1Temperature);
-        unit->FET_Temp = BQ769x2_ReadTemperature(unit, TS3Temperature);
+        float cell_temp = BQ769x2_ReadTemperature(unit, TS1Temperature, &ok);
+        if (ok) {
+            unit->CELL_Temp = cell_temp;
+        }
+        float fet_temp = BQ769x2_ReadTemperature(unit, TS3Temperature, &ok);
+        if (ok) {
+            unit->FET_Temp = fet_temp;
+        }
         DirectCommands(unit, AlarmStatus, 0x0080, W);
     }
 }
 
 void BQ769x2_ReadDASTATUS5(BMS_Unit *unit)
 {
-    Subcommands(unit, DASTATUS5, 0x00, R);
+    if (Subcommands(unit, DASTATUS5, 0x00, R) != 0) {
+        return;
+    }
 
     unit->MaxCellVolatge = u16_le(&unit->RX_SubData[4]);
     unit->MinCellVolatge = u16_le(&unit->RX_SubData[6]);
@@ -649,7 +706,9 @@ void BQ769x2_ReadDASTATUS5(BMS_Unit *unit)
 
 void BQ769x2_ReadDASTATUS6(BMS_Unit *unit)
 {
-    Subcommands(unit, DASTATUS6, 0x00, R);
+    if (Subcommands(unit, DASTATUS6, 0x00, R) != 0) {
+        return;
+    }
 
     if (is_current_board(unit)) {
         unit->AccumulatedCharge_Int = i32_le(&unit->RX_SubData[0]);
@@ -677,7 +736,9 @@ void BQ769x2_ReadLargeSubcommand(BMS_Unit *unit, uint16_t command, uint16_t *des
 
     I2C_WriteReg(unit, 0x3E, TX_Reg, 2);
     delayUS(2000);
-    I2C_ReadReg(unit, 0x40, RX_Buffer, 32);
+    if (I2C_ReadReg(unit, 0x40, RX_Buffer, 32) != 0) {
+        return;
+    }
 
     for (int i = 0; i < 16; i++) {
         dest_array[i] = u16_le(&RX_Buffer[i * 2]);
@@ -686,9 +747,23 @@ void BQ769x2_ReadLargeSubcommand(BMS_Unit *unit, uint16_t command, uint16_t *des
 
 void BQ769x2_Read_Extra_Direct(BMS_Unit *unit)
 {
-    unit->Int_Temp = BQ769x2_ReadTemperature(unit, IntTemperature);
-    unit->CFETOFF_Temp = BQ769x2_ReadTemperature(unit, CFETOFFTemperature);
-    unit->HDQ_Temp = BQ769x2_ReadTemperature(unit, HDQTemperature);
+    int ok;
+    float temp;
+
+    temp = BQ769x2_ReadTemperature(unit, IntTemperature, &ok);
+    if (ok) {
+        unit->Int_Temp = temp;
+    }
+
+    temp = BQ769x2_ReadTemperature(unit, CFETOFFTemperature, &ok);
+    if (ok) {
+        unit->CFETOFF_Temp = temp;
+    }
+
+    temp = BQ769x2_ReadTemperature(unit, HDQTemperature, &ok);
+    if (ok) {
+        unit->HDQ_Temp = temp;
+    }
 }
 
 void BQ769x2_Read_Snapshots(BMS_Unit *unit)
@@ -747,6 +822,8 @@ void BMS_FanControl_Update(void)
 
 uint8_t Check_BMS_Sleep_State(BMS_Unit *unit)
 {
-    DirectCommands(unit, BatteryStatus, 0x00, R);
+    if (DirectCommands(unit, BatteryStatus, 0x00, R) != 0) {
+        return 0U;
+    }
     return (u16_le(unit->RX_data) & 0x8000U) ? 1U : 0U;
 }

@@ -150,20 +150,22 @@ unsigned char CRC8(unsigned char *ptr, unsigned char len);
 void I2C_WriteReg(BMS_Unit *unit, uint8_t reg_addr, uint8_t *reg_data, uint8_t count);
 int I2C_ReadReg(BMS_Unit *unit, uint8_t reg_addr, uint8_t *reg_data, uint8_t count);
 void BQ769x2_SetRegister(BMS_Unit *unit, uint16_t reg_addr, uint32_t reg_data, uint8_t datalen);
-void DirectCommands(BMS_Unit *unit, uint8_t command, uint16_t data, uint8_t type);
+// 반환값: 0 = 성공, -1 = I2C/CRC 실패(레지스터 미갱신, 이전 값 유지) — 호출부는 반드시 확인할 것
+int DirectCommands(BMS_Unit *unit, uint8_t command, uint16_t data, uint8_t type);
 void CommandSubcommands(BMS_Unit *unit, uint16_t command);
-void Subcommands(BMS_Unit *unit, uint16_t command, uint16_t data, uint8_t type);
+int Subcommands(BMS_Unit *unit, uint16_t command, uint16_t data, uint8_t type);
 
-uint16_t BQ769x2_ReadAlarmStatus(BMS_Unit *unit);
+// ok가 NULL이 아니면 읽기 성공 여부(1/0)를 기록한다. ok==0이면 반환값은 신뢰할 수 없는(스크래치 버퍼 잔존) 값이므로 사용하지 말 것.
+uint16_t BQ769x2_ReadAlarmStatus(BMS_Unit *unit, int *ok);
 void BQ769x2_ReadAlarmRawStatus(BMS_Unit *unit);
 void BQ769x2_ReadSafetyStatus(BMS_Unit *unit);
 void BQ769x2_ReadPFStatus(BMS_Unit *unit);
 void BQ769x2_ReadFETStatus(BMS_Unit *unit);
 void BQ769x2_ReadBATTStatus(BMS_Unit *unit);
-uint32_t BQ769x2_ReadVoltage(BMS_Unit *unit, uint8_t command);
+uint32_t BQ769x2_ReadVoltage(BMS_Unit *unit, uint8_t command, int *ok);
 void BQ769x2_ReadAllVoltages(BMS_Unit *unit);
-int16_t BQ769x2_ReadCurrent(BMS_Unit *unit);
-float BQ769x2_ReadTemperature(BMS_Unit *unit, uint8_t command);
+int16_t BQ769x2_ReadCurrent(BMS_Unit *unit, int *ok);
+float BQ769x2_ReadTemperature(BMS_Unit *unit, uint8_t command, int *ok);
 void BQ769x2_ReadData(BMS_Unit *unit);
 void BQ769x2_ReadDASTATUS5(BMS_Unit *unit);
 void BQ769x2_ReadDASTATUS6(BMS_Unit *unit);
