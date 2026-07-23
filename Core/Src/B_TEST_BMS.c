@@ -18,11 +18,13 @@ void BQ769x2_ReadDiagnostics(BMS_Unit *unit)
     BQ769x2_ReadLargeSubcommand(unit, CBSTATUS2, unit->CB_Status2);
     BQ769x2_ReadLargeSubcommand(unit, CBSTATUS3, unit->CB_Status3);
 
-    Subcommands(unit, CBSTATUS1, 0x00, R);
-    unit->CB_Status1 = test_u16_le(&unit->RX_SubData[0]);
+    if (Subcommands(unit, CBSTATUS1, 0x00, R) == 0) {
+        unit->CB_Status1 = test_u16_le(&unit->RX_SubData[0]);
+    }
 
-    Subcommands(unit, CB_ACTIVE_CELLS, 0x00, R);
-    unit->CB_ActiveCells = test_u16_le(&unit->RX_SubData[0]);
+    if (Subcommands(unit, CB_ACTIVE_CELLS, 0x00, R) == 0) {
+        unit->CB_ActiveCells = test_u16_le(&unit->RX_SubData[0]);
+    }
 }
 
 void BQ769x2_ReadTestExtraData(BMS_Unit *unit)
