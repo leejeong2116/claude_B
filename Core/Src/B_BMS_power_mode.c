@@ -102,10 +102,13 @@ void Enter_Sleep_Sequence(void)
     }
 }
 
-void Handle_Wakeup_Event(void)
+bool Handle_Wakeup_Event(void)
 {
+    bool already_ran_while_run = false;
+
     if (wakeup_reason == WAKEUP_BY_ALERT) {
     	LV_BMS_WHILE_RUN();
+    	already_ran_while_run = true;
 
         if (!Is_No_Load() || BMS[BOT].ProtectionsTriggered || BMS[TOP].ProtectionsTriggered) {
             CommandSubcommands(&BMS[TOP], SLEEP_DISABLE);
@@ -115,4 +118,5 @@ void Handle_Wakeup_Event(void)
     }
 
     wakeup_reason = WAKEUP_NONE;
+    return already_ran_while_run;
 }
