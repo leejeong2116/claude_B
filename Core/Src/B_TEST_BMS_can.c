@@ -13,50 +13,50 @@
  * their pre-existing base+offset addresses until a new ID is assigned.
  */
 #define CANID_STATUS_BOT            0x040U
-#define CANID_STATUS_TOP            0x043U
+#define CANID_STATUS_TOP            0x044U
 #define CANID_VOLTAGE_BOT           0x041U
-#define CANID_VOLTAGE_TOP           0x044U
+#define CANID_VOLTAGE_TOP           0x045U
 #define CANID_CURRENT_BOT           0x042U
-#define CANID_CURRENT_TOP           0x045U
-#define CANID_SOC_RUN_BOT           0x503U /* legacy */
-#define CANID_SOC_RUN_TOP           0x603U /* legacy */
+#define CANID_CURRENT_TOP           0x046U
+#define CANID_SOC_RUN_BOT           0x043U
+#define CANID_SOC_RUN_TOP           0x047U
 
-#define CANID_CELLV_BASE_BOT        0x046U /* 4 frames: 0x046-0x049 */
-#define CANID_CELLV_BASE_TOP        0x04FU /* 4 frames: 0x04F-0x052 */
+#define CANID_CELLV_BASE_BOT        0x048U /* 4 frames: 0x048-0x04B */
+#define CANID_CELLV_BASE_TOP        0x051U /* 4 frames: 0x051-0x054 */
 #define CANID_STACKPACKV_TEST_BOT   0x111U /* legacy: duplicate of run-data voltage frame */
 #define CANID_STACKPACKV_TEST_TOP   0x211U /* legacy */
 #define CANID_CURRENT_DETAIL_BOT    0x112U /* legacy: CC1/CC3 current + CB active-cell count */
 #define CANID_CURRENT_DETAIL_TOP    0x212U /* legacy */
-#define CANID_TEMP1_BOT             0x04AU
-#define CANID_TEMP1_TOP             0x053U
-#define CANID_TEMP2_BOT             0x04BU
-#define CANID_TEMP2_TOP             0x054U
+#define CANID_TEMP1_BOT             0x04CU
+#define CANID_TEMP1_TOP             0x055U
+#define CANID_TEMP2_BOT             0x04DU
+#define CANID_TEMP2_TOP             0x056U
 #define CANID_STATUS_TEST_BOT       0x120U /* legacy: duplicate of run-data status frame */
 #define CANID_STATUS_TEST_TOP       0x220U /* legacy */
-#define CANID_SAFETY_BOT            0x058U
-#define CANID_SAFETY_TOP            0x06BU
-#define CANID_PF_BOT                0x059U
-#define CANID_PF_TOP                0x06CU
+#define CANID_SAFETY_BOT            0x05AU
+#define CANID_SAFETY_TOP            0x06DU
+#define CANID_PF_BOT                0x05BU
+#define CANID_PF_TOP                0x06EU
 #define CANID_FET_BOT               0x123U /* legacy: FET_Status/CHG/DSG/PDSG only */
 #define CANID_FET_TOP               0x223U /* legacy */
-#define CANID_CB_STATUS1_BOT        0x05AU
-#define CANID_CB_STATUS1_TOP        0x06DU
-#define CANID_COULOMB1_BOT          0x04CU
-#define CANID_COULOMB1_TOP          0x055U
-#define CANID_COULOMB2_BOT          0x04DU
-#define CANID_COULOMB2_TOP          0x056U
-#define CANID_COULOMB3_BOT          0x04EU
-#define CANID_COULOMB3_TOP          0x057U
+#define CANID_CB_STATUS1_BOT        0x05CU
+#define CANID_CB_STATUS1_TOP        0x06FU
+#define CANID_COULOMB1_BOT          0x04EU
+#define CANID_COULOMB1_TOP          0x057U
+#define CANID_COULOMB2_BOT          0x04FU
+#define CANID_COULOMB2_TOP          0x058U
+#define CANID_COULOMB3_BOT          0x050U
+#define CANID_COULOMB3_TOP          0x059U
 #define CANID_SOC_TEST_BOT          0x133U /* legacy */
 #define CANID_SOC_TEST_TOP          0x233U /* legacy */
-#define CANID_CUV_BASE_BOT          0x05BU /* 4 frames: 0x05B-0x05E */
-#define CANID_CUV_BASE_TOP          0x06EU /* 4 frames: 0x06E-0x071 */
-#define CANID_COV_BASE_BOT          0x05FU /* 4 frames: 0x05F-0x062 */
-#define CANID_COV_BASE_TOP          0x072U /* 4 frames: 0x072-0x075 */
-#define CANID_CB_STATUS2_BASE_BOT   0x063U /* 4 frames: 0x063-0x066 */
-#define CANID_CB_STATUS2_BASE_TOP   0x076U /* 4 frames: 0x076-0x079 */
-#define CANID_CB_STATUS3_BASE_BOT   0x067U /* 4 frames: 0x067-0x06A */
-#define CANID_CB_STATUS3_BASE_TOP   0x07AU /* 4 frames: 0x07A-0x07D */
+#define CANID_CUV_BASE_BOT          0x05DU /* 4 frames: 0x05D-0x060 */
+#define CANID_CUV_BASE_TOP          0x070U /* 4 frames: 0x070-0x073 */
+#define CANID_COV_BASE_BOT          0x061U /* 4 frames: 0x061-0x064 */
+#define CANID_COV_BASE_TOP          0x074U /* 4 frames: 0x074-0x077 */
+#define CANID_CB_STATUS2_BASE_BOT   0x065U /* 4 frames: 0x065-0x068 */
+#define CANID_CB_STATUS2_BASE_TOP   0x078U /* 4 frames: 0x078-0x07B */
+#define CANID_CB_STATUS3_BASE_BOT   0x069U /* 4 frames: 0x069-0x06C */
+#define CANID_CB_STATUS3_BASE_TOP   0x07CU /* 4 frames: 0x07C-0x07F */
 
 static FDCAN_TxHeaderTypeDef BMS_TxHeader;
 static uint8_t BMS_TxData[8];

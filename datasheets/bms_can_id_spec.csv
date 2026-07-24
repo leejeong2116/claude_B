@@ -1,45 +1,45 @@
 구분,CAN ID,보드,필드,설명
 PRIMARY,0x040,BOT,"Global_Fault(u32), BattStat(u16), Alarm(u16)",팩 전체 고장 코드/배터리 상태/경고 플래그 (run data)
-PRIMARY,0x043,TOP,"Global_Fault(u32), BattStat(u16), Alarm(u16)",BOT 0x040과 동일 구조 (run data)
+PRIMARY,0x044,TOP,"Global_Fault(u32), BattStat(u16), Alarm(u16)",BOT 0x040과 동일 구조 (run data)
 PRIMARY,0x041,BOT,"Stack_Voltage(u32,mV), Pack_Voltage(u32,mV)",셀 스택 전체 전압과 팩 출력단 전압 (run data)
-PRIMARY,0x044,TOP,"Stack_Voltage(u32,mV), Pack_Voltage(u32,mV)",BOT 0x041과 동일 구조 (run data)
+PRIMARY,0x045,TOP,"Stack_Voltage(u32,mV), Pack_Voltage(u32,mV)",BOT 0x041과 동일 구조 (run data)
 PRIMARY,0x042,BOT,"Pack_Current(i16), MaxCellVoltage(u16,mV), MinCellVoltage(u16,mV), CellTemp(i16,0.1C)",팩 충방전 전류/셀 전압 최대·최소/대표 셀 온도 (run data)
-PRIMARY,0x045,TOP,"Pack_Current(i16, always 0), MaxCellVoltage(u16,mV), MinCellVoltage(u16,mV), CellTemp(i16,0.1C)",BOT 0x042과 동일 구조 (run data). TOP은 전류감지 핀(SRP/SRN) 미사용이라 Pack_Current는 항상 0으로 전송
-LEGACY,0x503,BOT,SOC(u16 permille),run data SOC 프레임 - 스프레드시트에 매칭 항목 없어 기존 ID 유지
-LEGACY,0x603,TOP,SOC(u16 permille),run data SOC 프레임 - 스프레드시트에 매칭 항목 없어 기존 ID 유지
-DETAIL(셀전압),0x046-0x049,BOT,Cell[0..15] 전압 (u16x4/frame,mV),개별 셀 16개 전압 (4프레임)
-DETAIL(셀전압),0x04F-0x052,TOP,Cell[0..15] 전압 (u16x4/frame,mV),개별 셀 16개 전압 (4프레임)
+PRIMARY,0x046,TOP,"Pack_Current(i16, always 0), MaxCellVoltage(u16,mV), MinCellVoltage(u16,mV), CellTemp(i16,0.1C)",BOT 0x042과 동일 구조 (run data). TOP은 전류감지 핀(SRP/SRN) 미사용이라 Pack_Current는 항상 0으로 전송
+PRIMARY,0x043,BOT,SOC(u16 permille),run data SOC 프레임
+PRIMARY,0x047,TOP,SOC(u16 permille),run data SOC 프레임
+DETAIL(셀전압),0x048-0x04B,BOT,Cell[0..15] 전압 (u16x4/frame,mV),개별 셀 16개 전압 (4프레임)
+DETAIL(셀전압),0x051-0x054,TOP,Cell[0..15] 전압 (u16x4/frame,mV),개별 셀 16개 전압 (4프레임)
 LEGACY,0x111,BOT,"Stack_Voltage(u32,mV), Pack_Voltage(u32,mV)",run data 전압 프레임과 중복 - 스프레드시트에 매칭 항목 없어 기존 ID 유지
 LEGACY,0x211,TOP,"Stack_Voltage(u32,mV), Pack_Voltage(u32,mV)",run data 전압 프레임과 중복 - 스프레드시트에 매칭 항목 없어 기존 ID 유지
 LEGACY,0x112,BOT,"Pack_Current(i16), CC1_Current(i16), CC3_Current(i16), CB_ActiveCells(u16)",스프레드시트에 매칭 항목 없어 기존 ID 유지
 LEGACY,0x212,TOP,"Pack_Current(i16, always 0), CC1_Current(i16, always 0), CC3_Current(i16, always 0), CB_ActiveCells(u16)",스프레드시트에 매칭 항목 없어 기존 ID 유지. TOP은 전류감지 핀(SRP/SRN) 미사용이라 전류 필드는 항상 0으로 전송
-DETAIL(온도),0x04A,BOT,"CellTemp(TS1), FETTemp, IntTemp, CFETOFFTemp (i16x4,0.1C)",서미스터별 온도: 대표 셀/FET/내부(IC)/충전FET 차단
-DETAIL(온도),0x053,TOP,"CellTemp(TS1), FETTemp, IntTemp, CFETOFFTemp (i16x4,0.1C)",BOT 0x04A와 동일 구조
-DETAIL(온도),0x04B,BOT,"HDQTemp, MaxCellTemp, MinCellTemp, AvgCellTemp (i16x4,0.1C)",HDQ 핀 온도와 셀 온도 최대/최소/평균
-DETAIL(온도),0x054,TOP,"HDQTemp, MaxCellTemp, MinCellTemp, AvgCellTemp (i16x4,0.1C)",BOT 0x04B와 동일 구조
+DETAIL(온도),0x04C,BOT,"CellTemp(TS1), FETTemp, IntTemp, CFETOFFTemp (i16x4,0.1C)",서미스터별 온도: 대표 셀/FET/내부(IC)/충전FET 차단
+DETAIL(온도),0x055,TOP,"CellTemp(TS1), FETTemp, IntTemp, CFETOFFTemp (i16x4,0.1C)",BOT 0x04C와 동일 구조
+DETAIL(온도),0x04D,BOT,"HDQTemp, MaxCellTemp, MinCellTemp, AvgCellTemp (i16x4,0.1C)",HDQ 핀 온도와 셀 온도 최대/최소/평균
+DETAIL(온도),0x056,TOP,"HDQTemp, MaxCellTemp, MinCellTemp, AvgCellTemp (i16x4,0.1C)",BOT 0x04D와 동일 구조
 LEGACY,0x120,BOT,"Global_Fault(u32), BattStat(u16), Alarm(u16)",run data 상태 프레임과 중복 - 스프레드시트에 매칭 항목 없어 기존 ID 유지
 LEGACY,0x220,TOP,"Global_Fault(u32), BattStat(u16), Alarm(u16)",run data 상태 프레임과 중복 - 스프레드시트에 매칭 항목 없어 기존 ID 유지
-SD_ONLY(Safety),0x058,BOT,"SafetyAlert A/B/C, SafetyStatus A/B/C, ProtectionsTriggered, PF_ProtectionsTriggered (u8x8)",안전회로 경보/상태(A/B/C군) 및 보호기능/영구고장 트리거 여부
-SD_ONLY(Safety),0x06B,TOP,"SafetyAlert A/B/C, SafetyStatus A/B/C, ProtectionsTriggered, PF_ProtectionsTriggered (u8x8)",BOT 0x058과 동일 구조
-SD_ONLY(PF),0x059,BOT,"PFAlert A/B/C/D, PFStatus A/B/C/D (u8x8)",영구고장(Permanent Fail) 경보 및 상태 플래그(A~D군)
-SD_ONLY(PF),0x06C,TOP,"PFAlert A/B/C/D, PFStatus A/B/C/D (u8x8)",BOT 0x059와 동일 구조
-LEGACY,0x123,BOT,"FET_Status, CHG, DSG, PDSG (u8x4)",FET+CB_Status1+Alarm 복합 프레임에서 분리됨 - FET_Status/CHG/DSG/PDSG는 스프레드시트에 매칭 항목 없어 기존 ID 유지. CB_Status1은 아래 0x05A로, AlarmBits는 0x040의 Alarm 필드와 중복되어 삭제
+SD_ONLY(Safety),0x05A,BOT,"SafetyAlert A/B/C, SafetyStatus A/B/C, ProtectionsTriggered, PF_ProtectionsTriggered (u8x8)",안전회로 경보/상태(A/B/C군) 및 보호기능/영구고장 트리거 여부
+SD_ONLY(Safety),0x06D,TOP,"SafetyAlert A/B/C, SafetyStatus A/B/C, ProtectionsTriggered, PF_ProtectionsTriggered (u8x8)",BOT 0x05A과 동일 구조
+SD_ONLY(PF),0x05B,BOT,"PFAlert A/B/C/D, PFStatus A/B/C/D (u8x8)",영구고장(Permanent Fail) 경보 및 상태 플래그(A~D군)
+SD_ONLY(PF),0x06E,TOP,"PFAlert A/B/C/D, PFStatus A/B/C/D (u8x8)",BOT 0x05B와 동일 구조
+LEGACY,0x123,BOT,"FET_Status, CHG, DSG, PDSG (u8x4)",FET+CB_Status1+Alarm 복합 프레임에서 분리됨 - FET_Status/CHG/DSG/PDSG는 스프레드시트에 매칭 항목 없어 기존 ID 유지. CB_Status1은 아래 0x05C로, AlarmBits는 0x040의 Alarm 필드와 중복되어 삭제
 LEGACY,0x223,TOP,"FET_Status, CHG, DSG, PDSG (u8x4)",BOT 0x123과 동일 구조 (분리 내역은 위 참고)
-SD_ONLY(밸런싱),0x05A,BOT,CB_Status1 (u16 비트맵),셀 밸런싱 활성 상태 비트맵 1 (FET 복합 프레임에서 분리됨)
-SD_ONLY(밸런싱),0x06D,TOP,CB_Status1 (u16 비트맵),BOT 0x05A와 동일 구조
-DETAIL(쿨롱),0x04C,BOT,"AccumChargeInt(i32), AccumChargeFrac(u32)",누적 충전량(쿨롱 카운팅) 정수부/소수부
-DETAIL(쿨롱),0x055,TOP,"AccumChargeInt(i32), AccumChargeFrac(u32)",BOT 0x04C와 동일 구조
-DETAIL(쿨롱),0x04D,BOT,"AccumChargeTime(u32), CC2Counts(i32)",누적 충전 시간과 2차 쿨롱 카운터 값
-DETAIL(쿨롱),0x056,TOP,"AccumChargeTime(u32), CC2Counts(i32)",BOT 0x04D와 동일 구조
-DETAIL(쿨롱),0x04E,BOT,"CC3Counts(i32), BattVoltageSum(u16) - DLC 6바이트",3차 쿨롱 카운터/셀 전압 합산값. LD(Load Detect) 핀은 BOT/TOP 모두 미사용이라 LD_Voltage 필드는 프레임에서 제거(8→6바이트)
-DETAIL(쿨롱),0x057,TOP,"CC3Counts(i32), BattVoltageSum(u16) - DLC 6바이트",BOT 0x04E와 동일 구조
+SD_ONLY(밸런싱),0x05C,BOT,CB_Status1 (u16 비트맵),셀 밸런싱 활성 상태 비트맵 1 (FET 복합 프레임에서 분리됨)
+SD_ONLY(밸런싱),0x06F,TOP,CB_Status1 (u16 비트맵),BOT 0x05C와 동일 구조
+DETAIL(쿨롱),0x04E,BOT,"AccumChargeInt(i32), AccumChargeFrac(u32)",누적 충전량(쿨롱 카운팅) 정수부/소수부
+DETAIL(쿨롱),0x057,TOP,"AccumChargeInt(i32), AccumChargeFrac(u32)",BOT 0x04E와 동일 구조
+DETAIL(쿨롱),0x04F,BOT,"AccumChargeTime(u32), CC2Counts(i32)",누적 충전 시간과 2차 쿨롱 카운터 값
+DETAIL(쿨롱),0x058,TOP,"AccumChargeTime(u32), CC2Counts(i32)",BOT 0x04F와 동일 구조
+DETAIL(쿨롱),0x050,BOT,"CC3Counts(i32), BattVoltageSum(u16) - DLC 6바이트",3차 쿨롱 카운터/셀 전압 합산값. LD(Load Detect) 핀은 BOT/TOP 모두 미사용이라 LD_Voltage 필드는 프레임에서 제거(8→6바이트)
+DETAIL(쿨롱),0x059,TOP,"CC3Counts(i32), BattVoltageSum(u16) - DLC 6바이트",BOT 0x050와 동일 구조
 LEGACY,0x133,BOT,SOC(u16 permille),test data SOC 프레임 - 스프레드시트에 매칭 항목 없어 기존 ID 유지
 LEGACY,0x233,TOP,SOC(u16 permille),test data SOC 프레임 - 스프레드시트에 매칭 항목 없어 기존 ID 유지
-SD_ONLY(CUV),0x05B-0x05E,BOT,CUV(저전압) 스냅샷[0..15] (u16x4/frame,mV),저전압 보호 발동 시점의 셀별 전압 스냅샷 (4프레임)
-SD_ONLY(CUV),0x06E-0x071,TOP,CUV(저전압) 스냅샷[0..15] (u16x4/frame,mV),BOT과 동일 구조 (4프레임)
-SD_ONLY(COV),0x05F-0x062,BOT,COV(과전압) 스냅샷[0..15] (u16x4/frame,mV),과전압 보호 발동 시점의 셀별 전압 스냅샷 (4프레임)
-SD_ONLY(COV),0x072-0x075,TOP,COV(과전압) 스냅샷[0..15] (u16x4/frame,mV),BOT과 동일 구조 (4프레임)
-SD_ONLY(밸런싱),0x063-0x066,BOT,CB_Status2[0..15] 비트맵 (u16x4/frame),셀별(16개) 밸런싱 상태 비트맵 2 (4프레임)
-SD_ONLY(밸런싱),0x076-0x079,TOP,CB_Status2[0..15] 비트맵 (u16x4/frame),BOT과 동일 구조 (4프레임)
-SD_ONLY(밸런싱),0x067-0x06A,BOT,CB_Status3[0..15] 비트맵 (u16x4/frame),셀별(16개) 밸런싱 상태 비트맵 3 (4프레임)
-SD_ONLY(밸런싱),0x07A-0x07D,TOP,CB_Status3[0..15] 비트맵 (u16x4/frame),BOT과 동일 구조 (4프레임)
+SD_ONLY(CUV),0x05D-0x060,BOT,CUV(저전압) 스냅샷[0..15] (u16x4/frame,mV),저전압 보호 발동 시점의 셀별 전압 스냅샷 (4프레임)
+SD_ONLY(CUV),0x070-0x073,TOP,CUV(저전압) 스냅샷[0..15] (u16x4/frame,mV),BOT과 동일 구조 (4프레임)
+SD_ONLY(COV),0x061-0x064,BOT,COV(과전압) 스냅샷[0..15] (u16x4/frame,mV),과전압 보호 발동 시점의 셀별 전압 스냅샷 (4프레임)
+SD_ONLY(COV),0x074-0x077,TOP,COV(과전압) 스냅샷[0..15] (u16x4/frame,mV),BOT과 동일 구조 (4프레임)
+SD_ONLY(밸런싱),0x065-0x068,BOT,CB_Status2[0..15] 비트맵 (u16x4/frame),셀별(16개) 밸런싱 상태 비트맵 2 (4프레임)
+SD_ONLY(밸런싱),0x078-0x07B,TOP,CB_Status2[0..15] 비트맵 (u16x4/frame),BOT과 동일 구조 (4프레임)
+SD_ONLY(밸런싱),0x069-0x06C,BOT,CB_Status3[0..15] 비트맵 (u16x4/frame),셀별(16개) 밸런싱 상태 비트맵 3 (4프레임)
+SD_ONLY(밸런싱),0x07C-0x07F,TOP,CB_Status3[0..15] 비트맵 (u16x4/frame),BOT과 동일 구조 (4프레임)
