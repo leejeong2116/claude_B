@@ -77,34 +77,34 @@ IDs follow `datasheets/bms_can_id_spec.csv`, defined as `CANID_*` macros at the 
 
 | Content | BOT | TOP |
 |---|---|---|
-| Status (fault/status) — run data | `0x040` | `0x043` |
-| Stack/pack voltage — run data | `0x041` | `0x044` |
-| Current/cell voltage/temp — run data | `0x042` | `0x045` |
-| SOC — run data *(legacy)* | `0x503` | `0x603` |
-| Cell voltages ×16 (4 frames) | `0x046`–`0x049` | `0x04F`–`0x052` |
+| Status (fault/status) — run data | `0x040` | `0x044` |
+| Stack/pack voltage — run data | `0x041` | `0x045` |
+| Current/cell voltage/temp — run data | `0x042` | `0x046` |
+| SOC — run data | `0x043` | `0x047` |
+| Cell voltages ×16 (4 frames) | `0x048`–`0x04B` | `0x051`–`0x054` |
 | Stack/pack voltage — test data *(legacy)* | `0x111` | `0x211` |
 | Current detail (CC1/CC3/CB active cells) *(legacy)* | `0x112` | `0x212` |
-| Temperature frame 1 (TS1/FET/Int/CFETOFF) | `0x04A` | `0x053` |
-| Temperature frame 2 (HDQ/Max/Min/Avg) | `0x04B` | `0x054` |
+| Temperature frame 1 (TS1/FET/Int/CFETOFF) | `0x04C` | `0x055` |
+| Temperature frame 2 (HDQ/Max/Min/Avg) | `0x04D` | `0x056` |
 | Status — test data *(legacy)* | `0x120` | `0x220` |
-| Safety alert/status | `0x058` | `0x06B` |
-| Permanent-fail alert/status | `0x059` | `0x06C` |
+| Safety alert/status | `0x05A` | `0x06D` |
+| Permanent-fail alert/status | `0x05B` | `0x06E` |
 | FET status (CHG/DSG/PDSG) *(legacy)* | `0x123` | `0x223` |
-| CB_Status1 | `0x05A` | `0x06D` |
-| Coulomb counter: accumulated charge int/frac | `0x04C` | `0x055` |
-| Coulomb counter: accumulated time/CC2 | `0x04D` | `0x056` |
-| Coulomb counter: CC3/voltage sum (6 bytes) | `0x04E` | `0x057` |
+| CB_Status1 | `0x05C` | `0x06F` |
+| Coulomb counter: accumulated charge int/frac | `0x04E` | `0x057` |
+| Coulomb counter: accumulated time/CC2 | `0x04F` | `0x058` |
+| Coulomb counter: CC3/voltage sum (6 bytes) | `0x050` | `0x059` |
 | SOC — test data *(legacy)* | `0x133` | `0x233` |
-| CUV snapshot ×16 (4 frames) | `0x05B`–`0x05E` | `0x06E`–`0x071` |
-| COV snapshot ×16 (4 frames) | `0x05F`–`0x062` | `0x072`–`0x075` |
-| CB_Status2 ×16 (4 frames) | `0x063`–`0x066` | `0x076`–`0x079` |
-| CB_Status3 ×16 (4 frames) | `0x067`–`0x06A` | `0x07A`–`0x07D` |
+| CUV snapshot ×16 (4 frames) | `0x05D`–`0x060` | `0x070`–`0x073` |
+| COV snapshot ×16 (4 frames) | `0x061`–`0x064` | `0x074`–`0x077` |
+| CB_Status2 ×16 (4 frames) | `0x065`–`0x068` | `0x078`–`0x07B` |
+| CB_Status3 ×16 (4 frames) | `0x069`–`0x06C` | `0x07C`–`0x07F` |
 
 Notes:
-- The FET status frame no longer carries `AlarmBits` — it's redundant with the `Alarm` field already in the status frame (`0x040`/`0x043`). `CB_Status1` was split out of that same combined frame into its own ID above.
+- The FET status frame no longer carries `AlarmBits` — it's redundant with the `Alarm` field already in the status frame (`0x040`/`0x044`). `CB_Status1` was split out of that same combined frame into its own ID above.
 - Run data (4 frames per board): fault flags + status, stack/pack voltage, current + cell voltage extremes + temperature, SOC.
 - Test data adds: all 16 cell voltages, temperatures, CB status, CUV/COV snapshots, coulomb counter data, SOC.
-- TOP has no current-sense pins (SRP/SRN unused — see the BQ76972 pin-usage table in the WSC report), so `Pack_Current`/`CC1_Current`/`CC3_Current` are always sent as `0` in TOP's frames (`0x045`, `0x212`) — real current data only comes from BOT (`BMS_CURRENT_BOARD`).
+- TOP has no current-sense pins (SRP/SRN unused — see the BQ76972 pin-usage table in the WSC report), so `Pack_Current`/`CC1_Current`/`CC3_Current` are always sent as `0` in TOP's frames (`0x046`, `0x212`) — real current data only comes from BOT (`BMS_CURRENT_BOARD`).
 - The LD (Load Detect) pin is unused on both boards, so `LD_Voltage_Raw` is no longer transmitted at all: the CC3 coulomb-counter frame (`0x04E`/`0x057`) was shrunk from 8 to 6 bytes (`bms_can_send_len()`, a DLC-parameterized variant of `bms_can_send()`) instead of zero-filling the field.
 - The legacy `0x110`/`0x210` (raw Stack/Pack voltage) frame was removed entirely — it duplicated the already-scaled (mV) `Stack_Voltage`/`Pack_Voltage` sent in both the run-data (`0x041`/`0x044`) and legacy test-data (`0x111`/`0x211`) voltage frames.
 
