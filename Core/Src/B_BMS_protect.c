@@ -14,31 +14,54 @@ BMS_ProtectState_t BMS_Protect = {0};
 /* ---------------------------------------------------------------------------
  * 임계값
  *
- * 시간 기준은 ms가 아니라 "사이클 수"다. SLEEP/STOP1 진입 시 HAL_SuspendTick()이 SysTick을 꺼서
- * HAL_GetTick()으로는 실제 경과 시간을 잴 수 없기 때문이다(B_BMS_power_mode.c:42의 TODO와 동일한 사정).
- * 부하가 있을 때 루프 주기는 BMS_NORMAL_SCAN_PERIOD_MS(63 ms)로 고정되므로, 아래 값들은
- * 부하 상태 기준의 대략적인 시간이다.
+ * 시간 기준을 ms가 아니라 "사이클 수"로 세는 이유: SLEEP/STOP1 진입 시 HAL_SuspendTick()이 SysTick을
+ * 꺼서 HAL_GetTick()으로는 실제 경과 시간을 잴 수 없다(B_BMS_power_mode.c:42의 TODO와 같은 사정).
+ *
+ * !! 루프 주기는 BMS_NORMAL_SCAN_PERIOD_MS(63 ms)가 아니다 !!
+ * Enter_Sleep_Sequence()의 HAL_Delay(63)는 한 사이클에서 마지막에 더해지는 값일 뿐이고,
+ * 실제 주기는 LV_BMS_WHILE_RUN()의 I2C 왕복이 지배한다:
+ *
+ *   - DirectCommands()/Subcommands()가 호출마다 delayUS(2000)을 건다
+ *   - 보드당 약 40회 + 서브커맨드 2회 => 보드당 ~84 ms, 두 보드 ~168 ms
+ *   - 100 kHz I2C 실제 전송 시간 ~68 ms (32바이트 서브커맨드 읽기가 CRC 포함 64바이트라 건당 ~6 ms)
+ *   - HAL_Delay(63)
+ *   => 합계 추정 ~300 ms
+ *
+ * 아래 값들은 이 추정 주기로 환산해 계산한다. 사이클 수를 직접 쓰지 않고 목표 시간(ms)에서
+ * 유도하므로, 실측 후 BMS_LOOP_PERIOD_MS_EST 하나만 고치면 모든 임계가 따라 움직인다.
+ *
+ * >>> 실측 필요: HARDWARE_VERIFICATION.md 참조. 실측값으로 아래 상수를 갱신할 것. <<<
+ * (이전 버전은 63 ms를 가정해서 실제로는 의도한 시간의 약 4.8배로 동작했다. 전부 느려지는
+ *  방향이라 오탐은 나지 않았지만, 복구 대기가 5초 의도 대비 24초로 늘어나 있었다.)
  * ------------------------------------------------------------------------- */
+#define BMS_LOOP_PERIOD_MS_EST   300U
 
-/* 절연 경로(G3VM) 전파 + BQ 내부 반응을 기다리는 유예. 3사이클 ≈ 190 ms.
+/* 목표 시간(ms) -> 사이클 수. 올림하고 최소 2사이클을 보장한다
+ * (1사이클 판정은 단발 글리치에 그대로 걸리므로) */
+#define MS_TO_CYCLES(ms) \
+    ((((ms) + BMS_LOOP_PERIOD_MS_EST - 1U) / BMS_LOOP_PERIOD_MS_EST) < 2U ? 2U \
+     : (((ms) + BMS_LOOP_PERIOD_MS_EST - 1U) / BMS_LOOP_PERIOD_MS_EST))
+
+/* 절연 경로(G3VM) 전파 + BQ 내부 반응을 기다리는 유예.
  * 참고: BOT의 CFETF/DFETF PF(임계 0.1 A / -0.5 A, 지연 5 s)가 같은 고장을 하드웨어에서 잡아준다.
- * 이 크로스체크는 그것보다 빠른 백업이므로 유예를 짧게 잡아도 된다. */
-#define PATH_FAULT_CYCLES        3U
+ * 이 크로스체크는 그것보다 빠른 백업이므로 유예를 짧게 잡아도 된다.
+ * 단 G3VM 실측 지연이 이 시간보다 길면 정상 트립마다 오탐이 난다 (HARDWARE_VERIFICATION.md 2-5). */
+#define PATH_FAULT_CYCLES        MS_TO_CYCLES(600U)
 
-/* 연속 통신 실패 사이클. 5사이클 ≈ 315 ms */
-#define COMM_FAULT_CYCLES        5U
+/* 연속 통신 실패 */
+#define COMM_FAULT_CYCLES        MS_TO_CYCLES(1500U)
 
 /* 셀 전압 합 vs 스택 전압 괴리가 이만큼 이어지면 측정계 이상으로 본다 */
-#define STACK_MISMATCH_CYCLES    10U
+#define STACK_MISMATCH_CYCLES    MS_TO_CYCLES(3000U)
 
-/* BOTHOFF 해제 전 "완전히 깨끗한" 상태를 유지해야 하는 사이클. 80사이클 ≈ 5 s */
-#define CLEAN_CYCLES_TO_RELEASE  80U
+/* BOTHOFF 해제 전 "완전히 깨끗한" 상태를 유지해야 하는 시간 */
+#define CLEAN_CYCLES_TO_RELEASE  MS_TO_CYCLES(5000U)
 
 /* BOTHOFF 해제 재시도 한도. 초과하면 latch */
 #define BOTHOFF_RETRY_MAX        3U
 
-/* latch형 보호(OCDL/SCDL) 복구 명령 재전송 간격. 80사이클 ≈ 5 s */
-#define LATCH_RECOVER_INTERVAL   80U
+/* latch형 보호(OCDL/SCDL) 복구 명령 재전송 간격 */
+#define LATCH_RECOVER_INTERVAL   MS_TO_CYCLES(5000U)
 
 /* 소프트 백업 임계 — BQ 임계보다 반드시 여유를 두어야 BQ가 먼저 동작한다.
  * BQ: CUV 2.53 V / COV 4.1998 V / OTD 65 degC (B_BMS_init.c) */
@@ -48,10 +71,10 @@ BMS_ProtectState_t BMS_Protect = {0};
 
 /* 소프트 백업은 "BQ가 놓쳤다"를 판정하는 것이므로, BQ의 보호 지연보다 반드시 길게 기다려야 한다.
  * 그러지 않으면 BQ가 정상적으로 지연을 소화하는 동안 MCU가 먼저 끊어버리는 오탐이 난다.
- *   CUV/COV Delay = 1 s   -> 32사이클 ≈ 2 s
- *   OTD/OTC/OTF/SOT Delay = 5 s -> 110사이클 ≈ 7 s */
-#define SOFT_CELLV_FAULT_CYCLES  32U
-#define SOFT_TEMP_FAULT_CYCLES  110U
+ *   CUV/COV Delay = 1 s          -> 3 s 대기 (3배 여유)
+ *   OTD/OTC/OTF/SOT Delay = 5 s  -> 10 s 대기 (2배 여유) */
+#define SOFT_CELLV_FAULT_CYCLES  MS_TO_CYCLES(3000U)
+#define SOFT_TEMP_FAULT_CYCLES   MS_TO_CYCLES(10000U)
 
 /* 셀 전압 읽기가 "그럴듯한가" 판정 범위. 0 = 아직 안 읽음 */
 #define CELLV_PLAUSIBLE_MIN_mV  100U
@@ -254,6 +277,7 @@ void BMS_Protect_Update(void)
     } else {
         BMS_Protect.chg_mismatch_cycles = 0U;
         BMS_Protect.dsg_mismatch_cycles = 0U;
+        BMS_Protect.stuck_off_cycles = 0U;
     }
 
     /* -------- 3. 스택 측정계 크로스체크 -------- */

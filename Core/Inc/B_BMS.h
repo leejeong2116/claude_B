@@ -184,6 +184,8 @@ void BMS_FanControl_Init(void);
 void BMS_FanControl_Update(void);
 void BMS_FanControl_SetDuty(uint8_t duty_percent);
 uint8_t BMS_FanControl_GetDuty(void);
+// 0이면 아직 유효한 온도를 한 번도 못 읽었다는 뜻 (서미스터 미실장 의심). 팬은 정지 상태로 둔다.
+uint8_t BMS_FanControl_TempEverValid(void);
 
 uint8_t Check_BMS_Sleep_State(BMS_Unit *unit);
 void delayUS(uint32_t us);
