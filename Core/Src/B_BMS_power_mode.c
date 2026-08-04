@@ -9,9 +9,15 @@
 #include "B_BMS.h"
 #include "B_BMS_cmd.h"
 #include "B_BMS_protect.h"
+#include "B_BMS_rtc.h"
 
 #define BMS_NORMAL_SCAN_PERIOD_MS 63U //normal / 63ms scan
 #define BMS_SLEEP_SCAN_PERIOD_MS 5000U // sleep / 5s scan
+
+// 저전력 중 주기적으로 깨어나는 간격.
+// BQ의 HWDDelay(B_BMS_init.c, 60초)보다 반드시 짧아야 한다 — 깨어나서 BQ를 읽는 것이
+// 호스트 워치독을 리셋하는 동작이기 때문이다. 여유를 두어 절반으로 잡았다.
+#define BMS_WAKEUP_PERIOD_S 30U
 #define TIME_1_HOUR_MS 3600000UL
 #define TIME_3_DAYS_MS 259200000UL
 #define BMS_BATTERY_STATUS_SLEEP_BIT 0x8000U
@@ -40,12 +46,8 @@ void Configure_BMS_Normal_Mask(void)
     DirectCommands(&BMS[BOT], AlarmEnable, 0xF882, W);
 }
 */
-// TODO(#27): elapsed_ms는 실측이 아니라 가정된 스캔 주기(BMS_SLEEP_SCAN_PERIOD_MS/BMS_NORMAL_SCAN_PERIOD_MS)다.
-// HAL_SuspendTick()이 매 저전력 진입 전 SysTick을 꺼서 HAL_GetTick()으로 실제 경과 시간을 잴 수 없고,
-// SLEEP/STOP1은 다음 인터럽트(주로 BQ ALERT)까지 무기한 블로킹되므로 실제 경과 시간이 이 상수와 전혀
-// 무관하게 짧아지거나 길어질 수 있다 — 즉 1시간/3일 임계값 도달 시점이 실제 시간과 어긋날 수 있음.
-// 올바른 수정은 STOP1을 관통해 계속 도는 RTC Wake-up Timer를 별도 주기적 웨이크 소스로 추가해
-// 그 틱에서만 이 함수를 호출하는 것 (RTC/.ioc 변경 필요 — 하드웨어에서 검증 후 구현할 것).
+// 이제 elapsed_ms는 RTC로 실측한 값이다 (B_BMS_rtc.c). RTC를 못 세운 경우에만 예전처럼
+// 가정된 스캔 주기를 더하는 폴백으로 동작한다 — 그 경우 1시간/3일 임계는 실제 시간과 어긋난다.
 static void Accumulate_No_Load_Time(uint32_t elapsed_ms)
 {
     if (no_load_time_ms <= (UINT32_MAX - elapsed_ms)) {
@@ -77,12 +79,17 @@ void Enter_Sleep_Sequence(void)
     bool is_bot_sleep = ((BMS[BOT].BattStat & BMS_BATTERY_STATUS_SLEEP_BIT) != 0U);
     bool is_top_sleep = ((BMS[TOP].BattStat & BMS_BATTERY_STATUS_SLEEP_BIT) != 0U);
 
+    // RTC가 있으면 시간 누적은 아래에서 실측값으로 한다. 여기서 상수를 더하면 이중 계상이 된다.
+    bool use_rtc_time = (BMS_RTC_IsReady() != 0U);
+
     if (is_bot_sleep) {
             // TOP이 슬립이 아니면 슬립 전환 명령
             if (!is_top_sleep) {
                 CommandSubcommands(&BMS[TOP], SLEEP_ENABLE);  // TOP 슬립 진입
             }
-            Accumulate_No_Load_Time(BMS_SLEEP_SCAN_PERIOD_MS);  // 슬립 상태에서 시간 누적
+            if (!use_rtc_time) {
+                Accumulate_No_Load_Time(BMS_SLEEP_SCAN_PERIOD_MS);  // 폴백: 가정된 슬립 주기
+            }
         }
         // BOT 상태가 Non-Sleep일 경우
         else {
@@ -90,7 +97,9 @@ void Enter_Sleep_Sequence(void)
             if (is_top_sleep) {
                 CommandSubcommands(&BMS[TOP], SLEEP_DISABLE);  // TOP 슬립 해제
             }
-            Accumulate_No_Load_Time(BMS_NORMAL_SCAN_PERIOD_MS);  // 노멀 상태에서 시간 누적
+            if (!use_rtc_time) {
+                Accumulate_No_Load_Time(BMS_NORMAL_SCAN_PERIOD_MS);  // 폴백: 가정된 노멀 주기
+            }
         }
 
     if (no_load_time_ms >= TIME_3_DAYS_MS) {
@@ -99,6 +108,19 @@ void Enter_Sleep_Sequence(void)
         delayUS(5000);
         HAL_SuspendTick();
         HAL_PWREx_EnterSHUTDOWNMode();
+    }
+
+    // 자기 전에 RTC 시각을 기록해 두고, 깨어난 뒤 차이를 읽어 실제 경과 시간을 얻는다.
+    // SysTick은 아래에서 꺼지므로 HAL_GetTick()으로는 이걸 할 수 없다.
+    uint8_t rtc_ok = BMS_RTC_IsReady();
+    uint32_t sleep_entry_ms = rtc_ok ? BMS_RTC_NowMs() : 0U;
+
+    // 주기적으로 깨어나야 하는 이유 두 가지:
+    //   1. ALERT만 기다리면 BQ가 조용할 때 무기한 자게 되어 상태 감시가 멈춘다
+    //   2. BQ 호스트 워치독(HWDDelay 60초)이 트립하면 양쪽 칩이 FET을 연다.
+    //      주기적으로 깨어나 BQ를 읽으면 워치독이 리셋된다 (B_BMS_init.c의 HWD 주석 참조)
+    if (rtc_ok) {
+        BMS_RTC_StartWakeup(BMS_WAKEUP_PERIOD_S);
     }
 
     HAL_SuspendTick();
@@ -115,6 +137,11 @@ void Enter_Sleep_Sequence(void)
     if (entered_stop_mode) {
         SystemClock_Config();
         BMS_FanControl_Init();
+    }
+
+    if (rtc_ok) {
+        BMS_RTC_StopWakeup();
+        Accumulate_No_Load_Time(BMS_RTC_ElapsedMs(sleep_entry_ms));
     }
 }
 
