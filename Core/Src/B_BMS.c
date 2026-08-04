@@ -19,7 +19,11 @@ uint8_t LV_BMS_initOK = 0;
 uint16_t LV_BMS_running = 0;
 BMS_Unit BMS[STACK] = {0};
 
-#define BMS_FAN_PWM_CHANNEL TIM_CHANNEL_2
+// 팬은 2개다 (2027WSC 보고서 MCU 핀 표: PA1 = FAN1_PWM / TIM2 ch2, PA2 = FAN2_PWM / TIM2 ch3).
+// tim.c의 MX_TIM2_Init()이 두 채널 모두 PWM으로 설정하고 두 핀 모두 AF로 초기화하는데,
+// 이전에는 ch2만 Start/SetCompare 해서 FAN2가 전혀 돌지 않았다. 두 팬을 같은 duty로 구동한다.
+#define BMS_FAN1_PWM_CHANNEL TIM_CHANNEL_2
+#define BMS_FAN2_PWM_CHANNEL TIM_CHANNEL_3
 #define BMS_FAN_OFF_TEMP_C 33.0f
 #define BMS_FAN_ON_TEMP_C 35.0f
 #define BMS_FAN_FULL_TEMP_C 55.0f
@@ -293,10 +297,12 @@ void I2C_WriteReg(BMS_Unit *unit, uint8_t reg_addr, uint8_t *reg_data, uint8_t c
 
     if (HAL_I2C_Mem_Write(unit->hi2c, unit->dev_addr, reg_addr, 1, TX_Buffer, crc_count, 1000) != HAL_OK) {
         I2C_HAL_Fail++;
+        unit->comm_fail_this_cycle = 1U;
     }
 #else
     if (HAL_I2C_Mem_Write(unit->hi2c, unit->dev_addr, reg_addr, 1, reg_data, count, 1000) != HAL_OK) {
         I2C_HAL_Fail++;
+        unit->comm_fail_this_cycle = 1U;
     }
 #endif
 }
@@ -831,7 +837,8 @@ void BMS_FanControl_SetDuty(uint8_t duty_percent)
         pulse = period;
     }
 
-    __HAL_TIM_SET_COMPARE(&htim2, BMS_FAN_PWM_CHANNEL, pulse);
+    __HAL_TIM_SET_COMPARE(&htim2, BMS_FAN1_PWM_CHANNEL, pulse);
+    __HAL_TIM_SET_COMPARE(&htim2, BMS_FAN2_PWM_CHANNEL, pulse);
     BMS_FanDuty = duty_percent;
 }
 
@@ -843,7 +850,8 @@ uint8_t BMS_FanControl_GetDuty(void)
 void BMS_FanControl_Init(void)
 {
     BMS_FanControl_SetDuty(0U);
-    HAL_TIM_PWM_Start(&htim2, BMS_FAN_PWM_CHANNEL);
+    HAL_TIM_PWM_Start(&htim2, BMS_FAN1_PWM_CHANNEL);
+    HAL_TIM_PWM_Start(&htim2, BMS_FAN2_PWM_CHANNEL);
 }
 
 void BMS_FanControl_Update(void)
