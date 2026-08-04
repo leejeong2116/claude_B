@@ -115,6 +115,33 @@ Two open items are flagged there as `TODO` rather than silently decided:
   `Enter_Sleep_Sequence()` sleeping indefinitely. Default is unchanged (enabled); the real fix is
   an RTC periodic wake.
 
+### Voltage/current units (`DAConfiguration`)
+
+`DAConfiguration` is `0x06`: **centivolt (10 mV) user-volts, centiamp (10 mA) user-amps.**
+
+The volts half is not a free choice. Per TRM Table 13-15 (SLUUCW9 p.159), `Stack Voltage` (0x34),
+`PACK Pin Voltage` (0x36) and `LD Pin Voltage` (0x38) are reported in "user-volts" and must fit a
+**signed** 16-bit integer, so millivolt units saturate at 32767 mV. Each chip measures 16S (up to
+67.2 V), so millivolts are not usable here — `USER_VOLTS_CV` must stay at 1.
+
+`stack_userV_to_mV()` in `B_BMS.c` applies the matching ×10. **These two must always change together.**
+
+Not everything follows user-volts — check the TRM's unit column before assuming:
+
+| Value | Unit | Follows `DAConfiguration`? |
+|---|---|---|
+| Cell voltages (0x14–0x32) | mV | no — always mV |
+| Stack / PACK / LD voltage | userV | **yes** |
+| `Battery Voltage Sum` (DASTATUS5 bytes 8–9) | cV | no — always 10 mV |
+| Min/Max Cell Voltage (DASTATUS5 bytes 4–7) | mV | no |
+| CC1/CC3 current, accumulated charge | userA / userAh | **yes** |
+| Min Blow Fuse V, Shutdown Stack V, Sleep Charger V, PACK-TOS deltas | 10 mV | no |
+| CUV/COV thresholds | 50.6 mV steps | no |
+
+The current half (`USER_AMPS`) is assumed to be 10 mA in several places — `Is_No_Load()`'s `1000`
+= 10 A, the userAh→mAh scaling in `B_BMS_soc.c`, and the OCC/OCD/SCD threshold comments in
+`B_BMS_init.c`. Do not change bits 1:0 without auditing all of them.
+
 ### I2C communication
 
 `CRC_Mode` is hardcoded to `1`. Every byte written is followed by a CRC8 byte; every byte read is CRC8-verified. `RX_CRC_Fail` (global counter in `B_BMS.c`) increments on each CRC mismatch — check this during hardware debugging. Do not disable CRC mode; the BQ chip is configured for CRC mode in `B_BMS_init.c`.

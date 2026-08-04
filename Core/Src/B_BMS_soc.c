@@ -68,15 +68,17 @@ static uint16_t lookup_ocv_permille(float ocv_mV)
 }
 
 // TOP/BOT 각 16셀 평균 전압을 다시 평균 -> 팩 내 셀 1개의 대표 전압(mV)
-// Battery_Voltage_Sum은 DASTATUS5()의 "userV" 단위 raw 값(TRM Table 12-23, p.119)이며
-// DAConfiguration[USER_VOLTS_CV]를 따른다(TRM Table 13-15) — Stack/Pack/LD Voltage와 동일한 근거.
-// B_BMS_init.c의 BQ769x2_Init()은 TOP/BOT 분기 없이 DAConfiguration=0x02(USER_VOLTS_CV=0/밀리볼트)를
-// 양쪽 보드 모두에 쓰므로 둘 다 이미 mV 단위이며 ×10을 적용하면 안 됨
-// (Core/Src/B_BMS.c의 stack_userV_to_mV()와 동일한 근거, issue #27에서 발견된 TOP ×10 과대보고 버그 수정).
+//
+// Battery_Voltage_Sum(DASTATUS5 바이트 8-9)의 단위는 TRM Table 4-5(SLUUCW9 p.24)에 cV로 못박혀 있다.
+// Stack/PACK/LD Voltage와 달리 userV가 아니라 고정 10mV 단위이므로 DAConfiguration과 무관하게 항상 ×10이다.
+//
+// 이전 코드는 이 값을 userV(=mV)로 보고 ×10을 하지 않았는데, 그러면 16S 59.2 V가 5920 -> /16 = 370 mV로
+// 계산되어 OCV 테이블 하한(2500 mV) 아래로 떨어진다. 즉 OCV 재보정 경로가 탈 때마다 SOC가 0%로 고정됐다.
+// BMS_SOC_Init() 직후 첫 갱신과 10분 무부하 이후가 모두 이 경로다.
 static float average_cell_voltage_mV(void)
 {
-    float top_avg = (float)BMS[TOP].Battery_Voltage_Sum / 16.0f;
-    float bot_avg = (float)BMS[BOT].Battery_Voltage_Sum / 16.0f;
+    float top_avg = ((float)BMS[TOP].Battery_Voltage_Sum * 10.0f) / 16.0f;
+    float bot_avg = ((float)BMS[BOT].Battery_Voltage_Sum * 10.0f) / 16.0f;
 
     return (top_avg + bot_avg) / 2.0f;
 }

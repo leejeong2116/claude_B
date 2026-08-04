@@ -636,13 +636,20 @@ uint32_t BQ769x2_ReadVoltage(BMS_Unit *unit, uint8_t command, int *ok)
 }
 
 // StackVoltage(0x34)/PACKPinVoltage(0x36)/LDPinVoltage(0x38)는 TRM Direct Commands Table상 단위가
-// 고정 mV가 아니라 "userV"로, DAConfiguration[USER_VOLTS_CV]를 따른다(TRM Table 13-15).
-// B_BMS_init.c의 BQ769x2_Init()은 TOP/BOT 분기 없이 동일한 시퀀스를 실행하며, DAConfiguration=0x02
-// (USER_VOLTS_CV=0, Millivolt/1mV 단위)를 양쪽 보드 모두에 무조건 쓴다(B_BMS_init.c:42). 따라서
-// TOP도 이미 mV 단위이며 ×10을 적용하면 안 된다. (issue #27 리뷰에서 발견된 TOP 전압 ×10 과대보고 버그 수정)
+// 고정 mV가 아니라 "userV"로, DAConfiguration[USER_VOLTS_CV]를 따른다(TRM Table 13-15, SLUUCW9 p.159).
+//
+// B_BMS_init.c가 DAConfiguration=0x06(USER_VOLTS_CV=1, Centivolt/10mV)을 양쪽 보드에 쓰므로 ×10이 필요하다.
+//
+// 이전에는 0x02(1mV)였고 여기서도 ×10을 하지 않았는데, 그러면 TRM이 명시적으로 경고한 포화 조건에 걸린다:
+// "To ensure the Top-of-Stack, PACK, and LD pin voltages fit in a signed 16-bit integer type ...
+//  For applications that do not exceed 32 V, millivolts can be used. Other applications should use
+//  centivolts to avoid saturating at 32767 mV."
+// 칩당 16S는 최대 67.2 V라 32 V를 크게 넘으므로 판독값이 32767에 포화되어 있었다(≈32.767 V로 고정 표시).
+//
+// 이 함수와 B_BMS_init.c의 DAConfiguration 값은 반드시 함께 움직여야 한다.
 static uint32_t stack_userV_to_mV(uint16_t raw)
 {
-    return (uint32_t)raw;
+    return 10UL * (uint32_t)raw;
 }
 
 void BQ769x2_ReadAllVoltages(BMS_Unit *unit)

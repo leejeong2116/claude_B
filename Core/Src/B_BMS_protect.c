@@ -105,9 +105,9 @@ static uint8_t temp_is_plausible(float c)
  * 주의: Pack_Voltage는 쓰지 않는다. 스택형 구조에서 각 보드의 PACK 핀이 무엇을 보는지가 회로 의존적이라
  * "TOP + BOT = PACK"을 가정할 수 없기 때문이다. 대신 각 보드 안에서만 자기완결적으로 비교한다.
  *
- * 주의 2: Stack_Voltage가 16S에서 1 mV 단위라면 67 V = 67200 > uint16 범위를 넘는다.
- * (B_BMS.c의 stack_userV_to_mV() 주석 참조 — DAConfiguration=0x02 = 1 mV 단위로 되어 있음)
- * 실측으로 확정되기 전까지 오탐을 내지 않도록, 값이 그럴듯하지 않으면 이 검사를 건너뛴다. */
+ * 주의 2: Stack_Voltage 단위는 DAConfiguration[USER_VOLTS_CV]에 묶여 있다(B_BMS.c의 stack_userV_to_mV()
+ * 주석 참조). 설정이 어긋나면 이 검사가 통째로 오탐을 낼 수 있으므로, 셀 합과 자릿수부터 다르면
+ * 고장이 아니라 스케일 문제로 보고 판정을 건너뛴다. */
 static uint8_t stack_sum_mismatch(const BMS_Unit *u)
 {
     uint32_t sum = 0;

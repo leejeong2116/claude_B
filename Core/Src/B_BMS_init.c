@@ -140,7 +140,21 @@ void BQ769x2_Init(BMS_Unit* unit)
 	BQ769x2_SetRegister(unit, HDQPinConfig, 0x07, 1); //cell // 지금은 셀 온도/ 차후 조정
 	BQ769x2_SetRegister(unit, DCHGPinConfig, cfg->dchg_pin, 1); // 보드별: BOT=출력(→TOP.CFETOFF), TOP=서미스터
 	BQ769x2_SetRegister(unit, DDSGPinConfig, cfg->ddsg_pin, 1); // 보드별: BOT=출력(→TOP.DFETOFF), TOP=서미스터
-	BQ769x2_SetRegister(unit, DAConfiguration, 0x02, 1);//1mV, 10mA 단위 (전류 오버플로우 방지)
+	// 0x06 = USER_VOLTS_CV=1(센티볼트/10mV) + USER_AMPS=2(센티암페어/10mA)
+	//
+	// 이전 값 0x02는 USER_VOLTS_CV=0(밀리볼트/1mV)이었는데, TRM Table 13-15(SLUUCW9 p.159)가 명시적으로
+	// 경고한다: Top-of-Stack / PACK / LD 전압은 부호있는 16비트에 담기므로 밀리볼트를 쓰면 32767 mV에서
+	// 포화되며, "32 V를 넘지 않는 응용에서만 밀리볼트를 쓸 것"이라고 되어 있다.
+	// 본 설계는 칩당 16S(최대 67.2 V)라 32 V를 크게 넘으므로 0x34/0x36/0x38 판독값이 계속 32767에
+	// 포화되어 있었다. 센티볼트로 바꾸면 6720(=67.2 V)이라 여유가 충분하다.
+	//
+	// 전류 단위(비트 1:0)는 건드리지 않았다. 10mA 단위를 가정하는 코드가 여럿 있다
+	// (Is_No_Load()의 1000=10A, B_BMS_soc.c의 userAh->mAh 환산, OCC/OCD/SCD 임계 주석 등).
+	//
+	// 주의: 이 비트를 바꾸면 B_BMS.c의 stack_userV_to_mV()도 반드시 같이 바꿔야 한다.
+	// 반대로 Min Blow Fuse Voltage / Shutdown Stack Voltage / Sleep Charger Voltage Threshold /
+	// PACK-TOS Delta 계열은 userV가 아니라 고정 10mV 단위(TRM 13.3.1.x, 13.4.2.x)라 영향받지 않는다.
+	BQ769x2_SetRegister(unit, DAConfiguration, 0x06, 1);// 10mV, 10mA 단위
 	BQ769x2_SetRegister(unit, VCellMode, 0x0000, 2); //enable 16 cells (VC0 기준, NC 사용 안 함)
 	BQ769x2_SetRegister(unit, CC3Samples, 0x1E, 1); // [Average fillter samples 30EA ]
 
