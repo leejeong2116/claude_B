@@ -210,10 +210,10 @@ After waking from STOP1, both `SystemClock_Config()` and `BMS_FanControl_Init()`
 
 `BMS_SOC_Update()` runs every cycle inside `LV_BMS_WHILE_RUN()`, right before `BMS_SyncSharedHardwareData()`, so both stacks see the same `SOC_Permille` value (0–1000 = 0.0–100.0 %) after sync.
 
-- **Cell**: Samsung SDI INR21700-50S (5000 mAh typ, 3.6 V nominal, 4.20 V charge, 2.5 V cutoff).
-  `BMS_PACK_CAPACITY_mAh` is `BMS_CELL_CAPACITY_mAh × BMS_PACK_PARALLEL_COUNT`. **The parallel count
-  is not confirmed** — the old comment said 30S4P while the hardware is 16S×2 = 32S, so the series
-  count already disagreed. Fix `BMS_PACK_PARALLEL_COUNT` once the pack build is settled.
+- **Pack**: 32S5P — 32S = 16S × 2 chips, 5P of Samsung SDI INR21700-50S (5000 mAh typ, 3.6 V nominal,
+  4.20 V charge, 2.5 V cutoff, 25 A max continuous discharge, 6 A max continuous charge).
+  Pack capacity 25 Ah, 134.4 V max, 115.2 V nominal; 67.2 V max per chip stack.
+  `BMS_PACK_CAPACITY_mAh` = `BMS_CELL_CAPACITY_mAh × BMS_PACK_PARALLEL_COUNT`.
 - **Coulomb counting**: uses the BQ769x2's own CC2-based integrator (`AccumulatedCharge_Int`/`AccumulatedCharge_Frac` from `DASTATUS6`) rather than manually integrating `Pack_Current * dt` in the MCU — the chip keeps integrating through MCU STOP1 sleep, so no samples are lost while asleep. Each cycle's delta is divided by the pack capacity to update SOC.
 - **OCV re-anchoring**: once `no_load_time_ms` (tracked in `B_BMS_power_mode.c`) exceeds `BMS_SOC_OCV_REST_MS` (10 min), cell voltages are assumed to have relaxed to open-circuit, and SOC is overwritten from an OCV→SOC lookup table instead of the coulomb-counted value. This bounds long-run coulomb-counting drift.
 - `BMS_SOC_Init()` (called once from `main()` after `LV_BMS_MAIN_RUN()`) resets the estimator so the first `BMS_SOC_Update()` call seeds SOC from OCV rather than an assumed baseline.

@@ -290,6 +290,10 @@ void BQ769x2_Init(BMS_Unit* unit)
 	BQ769x2_SetRegister(unit, COVLLatchLimit, 0x05, 1); // [5CNT] 실험 후 사용 안함
 	BQ769x2_SetRegister(unit, COVLCounterDecDelay, 0x0A, 1); // [10s] 실험 후 사용 안함
 	BQ769x2_SetRegister(unit, COVLRecoveryTime, 0x14, 1); // [20s] 실험 후 사용 안함
+	// 32S5P 기준 셀당 10A. INR21700-50S 데이터시트 3.8은 10A를 "step charge" 한도로, 연속 충전은 6A로
+	// 규정한다(=5P에서 30A). 즉 이 임계는 연속 충전 정격을 넘는 구간을 잡지 못한다.
+	// 태양광 어레이 충전 전류는 이보다 훨씬 낮을 것으로 보이나, 회생 제동이 지속되는 구간이 있다면
+	// 30A 기준으로 낮출지 검토할 것. (임계를 바꾸면 SOCC PF 70A와의 순서도 함께 확인)
 	BQ769x2_SetRegister(unit, OCCThreshold, 0x0A, 1); // [20mV] // max charge current 10A -> 5p -> 50A ,shunt register 0.4m -> 50*0.4m = 20mV
 	BQ769x2_SetRegister(unit, OCCDelay, 0x7F, 1); // [419.1+6.6 = 425.7ms]
 	BQ769x2_SetRegister(unit, OCCRecoveryThreshold, 0xFC18, 2); // [-1A] = [65536-1000mA]
