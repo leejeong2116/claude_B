@@ -5,6 +5,7 @@
  */
 
 #include "B_TEST_BMS.h"
+#include "B_BMS_protect.h"
 #include "fdcan.h"
 
 /*
@@ -57,6 +58,7 @@
 #define CANID_CB_STATUS2_BASE_TOP   0x078U /* 4 frames: 0x078-0x07B */
 #define CANID_CB_STATUS3_BASE_BOT   0x069U /* 4 frames: 0x069-0x06C */
 #define CANID_CB_STATUS3_BASE_TOP   0x07CU /* 4 frames: 0x07C-0x07F */
+#define CANID_PROTECT_DIAG          0x080U /* 팩 단위 (보드별 아님) — MCU 보호 감시자 상태 */
 
 static FDCAN_TxHeaderTypeDef BMS_TxHeader;
 static uint8_t BMS_TxData[8];
@@ -176,6 +178,52 @@ void BMS_CAN_SendRunData(uint8_t board_type)
     put_u16_be(BMS_TxData, 4, 0);
     put_u16_be(BMS_TxData, 6, 0);
     bms_can_send(pick_id(board_type, CANID_SOC_RUN_BOT, CANID_SOC_RUN_TOP), BMS_TxData);
+}
+
+static uint8_t clamp_u8(uint16_t value)
+{
+    return (value > 255U) ? 255U : (uint8_t)value;
+}
+
+/*
+ * MCU 보호 감시자 진단 프레임 (0x080).
+ *
+ * "왜 끊겼는지"를 차 밖에서 바로 읽기 위한 프레임이다. 기존 프레임들은 SafetyStatus 원본만 나가서
+ * 사람이 비트를 손으로 디코딩해야 했고, MCU가 개입해서 끊은 경우는 아예 관측할 수 없었다.
+ *
+ *  byte 0 : 트립 사유 (BMS_TripReason_t)
+ *  byte 1 : 비트 플래그
+ *           b0 BOTHOFF 어서트  b1 latch
+ *           b2 CHG 기대=OFF    b3 DSG 기대=OFF
+ *           b4 CHG 실측=ON     b5 DSG 실측=ON
+ *           => b2와 b4가 동시에 1이면 차단 경로 고장 (b3/b5도 동일)
+ *  byte 2 : BOTHOFF 해제 재시도 횟수
+ *  byte 3 : CHG 불일치 연속 사이클
+ *  byte 4 : DSG 불일치 연속 사이클
+ *  byte 5 : 스택 측정 불일치 연속 사이클
+ *  byte 6 : TOP 연속 통신 실패 사이클
+ *  byte 7 : BOT 연속 통신 실패 사이클
+ */
+void BMS_CAN_SendProtectDiag(void)
+{
+    uint8_t flags = 0U;
+
+    if (BMS_Protect.bothoff_asserted) { flags |= 0x01U; }
+    if (BMS_Protect.latched)          { flags |= 0x02U; }
+    if (BMS_Protect.chg_expected_off) { flags |= 0x04U; }
+    if (BMS_Protect.dsg_expected_off) { flags |= 0x08U; }
+    if (BMS_Protect.chg_observed_on)  { flags |= 0x10U; }
+    if (BMS_Protect.dsg_observed_on)  { flags |= 0x20U; }
+
+    BMS_TxData[0] = (uint8_t)BMS_Protect.reason;
+    BMS_TxData[1] = flags;
+    BMS_TxData[2] = BMS_Protect.retry_count;
+    BMS_TxData[3] = clamp_u8(BMS_Protect.chg_mismatch_cycles);
+    BMS_TxData[4] = clamp_u8(BMS_Protect.dsg_mismatch_cycles);
+    BMS_TxData[5] = clamp_u8(BMS_Protect.stack_mismatch_cycles);
+    BMS_TxData[6] = clamp_u8(BMS[TOP].comm_fail_cycles);
+    BMS_TxData[7] = clamp_u8(BMS[BOT].comm_fail_cycles);
+    bms_can_send(CANID_PROTECT_DIAG, BMS_TxData);
 }
 
 void BMS_CAN_SendTestData(uint8_t board_type)

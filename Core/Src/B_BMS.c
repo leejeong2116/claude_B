@@ -161,6 +161,12 @@ void LV_BMS_MAIN_RUN(void)
     BMS[BOT].hi2c = &hi2c4;
     BMS[BOT].dev_addr = 0x10;
 
+    // 초기화가 끝나고 양쪽 칩 상태를 확인하기 전까지 FET을 열어둔다.
+    // BOT_DFETOFF는 오픈드레인 + 외부 풀업이라 MCU 리셋 직후에는 Hi-Z → High(=BOTHOFF)로 페일세이프가
+    // 걸려 있는데, MX_GPIO_Init()이 이 핀을 Low로 써서 BQ 초기화 전에 그 페일세이프를 풀어버린다.
+    // 여기서 다시 걸고, 아래에서 초기화 성공을 확인한 뒤에만 해제한다.
+    BQ769x2_BOTHOFF();
+
     for (int i = 0; i < STACK; i++) {
         HAL_I2C_Init(BMS[i].hi2c);
         delayUS(10000);
@@ -175,10 +181,29 @@ void LV_BMS_MAIN_RUN(void)
     delayUS(60000);
     delayUS(60000);
     delayUS(60000);
+
+    // 양쪽 칩이 실제로 응답하는지 확인한 뒤에만 BOTHOFF 해제. 한쪽이라도 응답이 없으면 FET을 연 채로
+    // 두고, 이후 B_BMS_protect.c의 TRIP_COMM 판정이 이어받는다.
+    uint8_t init_comm_ok = 1U;
+    for (int i = 0; i < STACK; i++) {
+        BMS[i].comm_fail_this_cycle = 0U;
+        (void)DirectCommands(&BMS[i], BatteryStatus, 0x00, R);
+        if (BMS[i].comm_fail_this_cycle != 0U) {
+            init_comm_ok = 0U;
+        }
+    }
+
+    if (init_comm_ok) {
+        BQ769x2_BOTHOFF_RESET();
+    }
 }
 
 void LV_BMS_WHILE_RUN(void)
 {
+    for (int i = 0; i < STACK; i++) {
+        BMS[i].comm_fail_this_cycle = 0U;
+    }
+
     for (int i = 0; i < STACK; i++) {
         BQ769x2_ReadData(&BMS[i]);
         BQ769x2_ReadAlarmRawStatus(&BMS[i]);
@@ -190,6 +215,17 @@ void LV_BMS_WHILE_RUN(void)
         }
         BQ769x2_ReadDASTATUS5(&BMS[i]);
         BQ769x2_ReadDASTATUS6(&BMS[i]);
+    }
+
+    // 이번 사이클에 읽기 실패가 하나라도 있었으면 연속 실패 카운트를 올린다.
+    for (int i = 0; i < STACK; i++) {
+        if (BMS[i].comm_fail_this_cycle != 0U) {
+            if (BMS[i].comm_fail_cycles < UINT16_MAX) {
+                BMS[i].comm_fail_cycles++;
+            }
+        } else {
+            BMS[i].comm_fail_cycles = 0U;
+        }
     }
 
     BMS_SOC_Update();
@@ -276,6 +312,7 @@ int I2C_ReadReg(BMS_Unit *unit, uint8_t reg_addr, uint8_t *reg_data, uint8_t cou
 
     if (HAL_I2C_Mem_Read(unit->hi2c, unit->dev_addr, reg_addr, 1, ReceiveBuffer, crc_count, 1000) != HAL_OK) {
         I2C_HAL_Fail++;
+        unit->comm_fail_this_cycle = 1U;
         return -1;
     }
 
@@ -299,6 +336,7 @@ int I2C_ReadReg(BMS_Unit *unit, uint8_t reg_addr, uint8_t *reg_data, uint8_t cou
 
     // CRC 실패 시 손상된 값을 reg_data에 반영하지 않고 이전 값을 그대로 유지한다.
     if (!crc_ok) {
+        unit->comm_fail_this_cycle = 1U;
         return -1;
     }
 
@@ -306,6 +344,7 @@ int I2C_ReadReg(BMS_Unit *unit, uint8_t reg_addr, uint8_t *reg_data, uint8_t cou
 #else
     if (HAL_I2C_Mem_Read(unit->hi2c, unit->dev_addr, reg_addr, 1, reg_data, count, 2000) != HAL_OK) {
         I2C_HAL_Fail++;
+        unit->comm_fail_this_cycle = 1U;
         return -1;
     }
 #endif

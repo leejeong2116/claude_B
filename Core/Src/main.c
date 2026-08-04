@@ -31,6 +31,7 @@
 #include "B_TEST_BMS.h"
 #include "B_BMS_power_mode.h"
 #include "B_BMS_soc.h"
+#include "B_BMS_protect.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -114,6 +115,16 @@ void LV_STAT()
         HAL_GPIO_WritePin(BOT_GREEN_GPIO_Port, BOT_GREEN_Pin, GPIO_PIN_SET);
         HAL_GPIO_WritePin(BOT_RED_GPIO_Port, BOT_RED_Pin, GPIO_PIN_RESET);
     }
+
+    // 3. MCU 보호 감시자 상태를 별도 LED로 구분한다.
+    //    위의 RED/GREEN은 "BQ가 보호를 걸었다"를 나타내고, 아래는 "MCU가 개입했다"를 나타낸다.
+    //    둘은 원인이 완전히 다르므로 현장에서 구분되어야 한다.
+    //    BLUE  = MCU가 BOTHOFF를 걸고 있음
+    //    TOP_RED = latch 상태(자동 복구 안 됨 — 사람이 확인해야 함)
+    HAL_GPIO_WritePin(BOT_BLUE_GPIO_Port, BOT_BLUE_Pin,
+                      BMS_Protect.bothoff_asserted ? GPIO_PIN_SET : GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(TOP_RED_GPIO_Port, TOP_RED_Pin,
+                      BMS_Protect.latched ? GPIO_PIN_SET : GPIO_PIN_RESET);
 }
 /* USER CODE END 0 */
 
@@ -158,6 +169,7 @@ int main(void)
   BMS_FanControl_Init();
   LV_BMS_MAIN_RUN();
   BMS_SOC_Init();
+  BMS_Protect_Init();
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -171,9 +183,12 @@ int main(void)
     if (!already_ran_while_run) {
       LV_BMS_WHILE_RUN();
     }
+    // 데이터를 읽은 직후, 팬/CAN/LED보다 먼저 판정한다 (차단 결정이 가장 급하므로).
+    BMS_Protect_Update();
     BMS_FanControl_Update();
     BMS_CAN_SendRunData(TOP);
     BMS_CAN_SendRunData(BOT);
+    BMS_CAN_SendProtectDiag();
     LV_STAT();
     Enter_Sleep_Sequence();
   }

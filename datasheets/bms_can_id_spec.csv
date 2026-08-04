@@ -43,3 +43,4 @@ SD_ONLY(밸런싱),0x065-0x068,BOT,CB_Status2[0..15] 비트맵 (u16x4/frame),셀
 SD_ONLY(밸런싱),0x078-0x07B,TOP,CB_Status2[0..15] 비트맵 (u16x4/frame),BOT과 동일 구조 (4프레임)
 SD_ONLY(밸런싱),0x069-0x06C,BOT,CB_Status3[0..15] 비트맵 (u16x4/frame),셀별(16개) 밸런싱 상태 비트맵 3 (4프레임)
 SD_ONLY(밸런싱),0x07C-0x07F,TOP,CB_Status3[0..15] 비트맵 (u16x4/frame),BOT과 동일 구조 (4프레임)
+DIAG,0x080,공통(팩단위),"TripReason(u8), Flags(u8), RetryCount(u8), ChgMismatchCycles(u8), DsgMismatchCycles(u8), StackMismatchCycles(u8), TopCommFailCycles(u8), BotCommFailCycles(u8)","MCU 보호 감시자(B_BMS_protect.c) 상태. Flags: b0 BOTHOFF어서트 b1 latch b2 CHG기대OFF b3 DSG기대OFF b4 CHG실측ON b5 DSG실측ON. b2와 b4가 동시에 1이면 CHG 차단 경로(BOT.DCHG→G3VM→TOP.CFETOFF) 고장, b3와 b5는 DSG 경로 고장"
