@@ -127,6 +127,12 @@ typedef struct _BMS_Unit {
     uint16_t SOC_Permille;
 
     uint32_t Global_Fault_Flags;
+
+    // 보드별 통신 상태. RX_CRC_Fail/I2C_HAL_Fail은 전역이라 어느 보드가 죽었는지 구분할 수 없어
+    // 별도로 둔다. comm_fail_this_cycle은 I2C_ReadReg()가 실패할 때마다 세팅되고,
+    // LV_BMS_WHILE_RUN()이 사이클 시작에 지우고 끝에 comm_fail_cycles로 집계한다.
+    uint8_t comm_fail_this_cycle;
+    uint16_t comm_fail_cycles;   // 연속 실패 사이클 수 (성공하면 0)
 } BMS_Unit;
 
 extern BMS_Unit BMS[STACK];

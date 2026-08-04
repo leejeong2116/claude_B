@@ -12,7 +12,25 @@
 #include "B_BMS_soc.h"
 #include "B_BMS_power_mode.h"
 
-#define BMS_PACK_CAPACITY_mAh 26000.0f              // 팩 전체 용량 26Ah (30S4P, Molicel INR-21700-M65A 6500mAh/cell(typical) x 4P)
+// 셀: Samsung SDI INR21700-50S
+// datasheets 폴더 밖이지만 KUST/datasheet/(삼성셀) Samsung-INR21700-50S datasheet.pdf 기준.
+//   3.1 Standard discharge capacity : Typ. 5,000 mAh (0.2C/1A 방전, 2.5V 컷오프)
+//   3.2 Rated discharge capacity    : Min. 4,800 mAh (10A 방전)
+//   3.3 Nominal voltage             : 3.6 V
+//   3.5 Rated charge                : CCCV 6A, 4.20 V
+//   3.9 Discharge cut-off           : 2.5 V
+//
+// SOC 계산에는 실사용 조건에 가까운 정격 용량(4,800 mAh)이 아니라 보수적으로 잡을지, 표준 용량
+// (5,000 mAh)을 쓸지 선택이 필요하다. 여기서는 표준 용량을 쓰되 아래 상수로 분리해 두었다.
+//
+// !! 확인 필요 !!
+// 병렬 수(P)를 확정해야 한다. 이전 주석은 "30S4P"라고 되어 있었는데, 본 BMS는 칩당 16S x 2 = 32S이고
+// 2027WSC 보고서도 32S 기준으로 FET을 선정했다. 직렬 수부터 서로 맞지 않으므로 P 수도 신뢰할 수 없다.
+// 팩 구성이 확정되면 BMS_PACK_PARALLEL_COUNT를 고쳐야 SOC가 맞는다.
+#define BMS_CELL_CAPACITY_mAh   5000.0f             // INR21700-50S 표준 방전 용량 (Typ.)
+#define BMS_PACK_PARALLEL_COUNT 4.0f                // TODO: 실제 팩 병렬 수로 확정할 것
+#define BMS_PACK_CAPACITY_mAh (BMS_CELL_CAPACITY_mAh * BMS_PACK_PARALLEL_COUNT)
+
 #define BMS_SOC_OCV_REST_MS (10UL * 60UL * 1000UL)  // 10분 이상 무부하 지속 시 셀 전압이 OCV에 근접했다고 보고 재보정
 
 typedef struct {
@@ -20,25 +38,40 @@ typedef struct {
     uint16_t soc_permille;
 } SOC_OCVPoint;
 
-// Molicel INR-21700-M65A 데이터시트(datasheets/(몰리셀)2025-Product-Data-Sheet-of-INR-21700-M65A...pdf)의
-// "Discharge Rate Characteristics" 그래프 중 가장 낮은 방전율(1.30A, 약 0.2C, OCV에 가장 근접) 커브를
-// 눈금 단위로 읽어 SOC 10% 간격으로 옮긴 값 (셀 1개 기준, mV). 데이터시트가 표가 아닌 그래프로만 제공되어
-// 그래프 판독 기반 근사치이며, 실측/정밀 디지타이징 데이터가 있으면 교체할 것.
-// Nominal 3.6V, Charge 4.2V, Discharge cut-off 2.5V (데이터시트 CELL CHARACTERISTICS 표 기준)
+// Samsung SDI INR21700-50S OCV -> SOC 근사 테이블 (셀 1개 기준, mV).
+//
+// >>> 출처와 한계를 반드시 읽을 것 <<<
+//
+// 50S 데이터시트에는 방전 전압 곡선 그래프가 없다. 7.8/7.9 "rate capabilities"는 전압 곡선이 아니라
+// 용량 백분율 표이고, 수록된 그림(Fig.1/Fig.2)은 치수도와 포장도다. 즉 이전 Molicel M65A 테이블처럼
+// "데이터시트 그래프를 눈금으로 읽는" 방법을 쓸 수 없었다.
+//
+// 따라서 아래 값은 데이터시트에서 확인 가능한 세 점
+//     4.20 V(만충) / 3.6 V(공칭, 평균 방전 전압) / 2.5 V(방전 컷오프)
+// 에 일반적인 고출력 NMC 셀의 OCV 형상을 맞춘 근사치다. 끝점 두 개(0%, 100%)만 데이터시트 확정값이고,
+// 중간 구간의 형상은 측정값이 아니다.
+//
+// 영향 범위: 이 테이블은 (1) 부팅 직후 SOC 시딩, (2) 10분 이상 무부하 후 재보정에만 쓰인다.
+// 주행 중 SOC는 쿨롱 카운팅이 담당하므로 중간 구간 오차가 즉시 주행에 반영되지는 않지만,
+// 장시간 정차 후 표시 SOC가 튈 수 있다.
+//
+// 교체 방법: 만충 후 0.05C 이하로 방전하며 10% 간격으로 1시간씩 쉬게 한 뒤 개방전압을 재는 것이
+// 가장 정확하다. 실측 데이터가 나오면 아래 값을 그대로 갈아끼우면 된다.
+// (HARDWARE_VERIFICATION.md 3-1 항목 참조)
 static const SOC_OCVPoint ocv_table[] = {
-    {2500,    0},
-    {3050,   50},
-    {3280,  100},
-    {3480,  200},
-    {3580,  300},
-    {3640,  400},
-    {3680,  500},
-    {3720,  600},
-    {3780,  700},
-    {3850,  800},
-    {3970,  900},
-    {4110,  950},
-    {4200, 1000},
+    {2500,    0},   // 데이터시트 3.9 방전 컷오프
+    {3080,   50},
+    {3320,  100},
+    {3450,  200},
+    {3530,  300},
+    {3590,  400},   // 이 부근이 데이터시트 3.3 공칭 3.6 V 구간
+    {3640,  500},
+    {3710,  600},
+    {3790,  700},
+    {3880,  800},
+    {3990,  900},
+    {4100,  950},
+    {4200, 1000},   // 데이터시트 3.5 정격 충전 전압
 };
 #define OCV_TABLE_LEN (sizeof(ocv_table) / sizeof(ocv_table[0]))
 
@@ -68,15 +101,24 @@ static uint16_t lookup_ocv_permille(float ocv_mV)
 }
 
 // TOP/BOT 각 16셀 평균 전압을 다시 평균 -> 팩 내 셀 1개의 대표 전압(mV)
-// Battery_Voltage_Sum은 DASTATUS5()의 "userV" 단위 raw 값(TRM Table 12-23, p.119)이며
-// DAConfiguration[USER_VOLTS_CV]를 따른다(TRM Table 13-15) — Stack/Pack/LD Voltage와 동일한 근거.
-// B_BMS_init.c의 BQ769x2_Init()은 TOP/BOT 분기 없이 DAConfiguration=0x02(USER_VOLTS_CV=0/밀리볼트)를
-// 양쪽 보드 모두에 쓰므로 둘 다 이미 mV 단위이며 ×10을 적용하면 안 됨
-// (Core/Src/B_BMS.c의 stack_userV_to_mV()와 동일한 근거, issue #27에서 발견된 TOP ×10 과대보고 버그 수정).
+//
+// Battery_Voltage_Sum(DASTATUS5 바이트 8-9)의 단위는 userV다 — TRM Table 12-23(SLUUCW9 p.118)의
+// 서브커맨드 상세 표 기준이며, 같은 표가 "This can be compared to the Stack Voltage()"라고 명시해
+// Stack Voltage와 동일 단위임을 뒷받침한다.
+// (주의: 개요 장의 Table 4-5(p.24)는 같은 필드를 cV로 표기해 서로 어긋난다. 상세 표를 따랐다.
+//  어느 쪽이든 DAConfiguration=0x06에서는 10mV 단위라 아래 ×10은 동일하다.)
+//
+// 즉 이 값은 Stack_Voltage와 마찬가지로 DAConfiguration[USER_VOLTS_CV]에 묶여 있다.
+// B_BMS.c의 stack_userV_to_mV()와 항상 같이 움직여야 한다.
+//
+// 이전 코드는 ×10 없이 그대로 mV로 취급했는데, 그때 DAConfiguration=0x02(밀리볼트)라 16S 59.2 V가
+// 부호있는 16비트에서 32767로 포화됐고 -> /16 = 2048 mV -> OCV 테이블 하한(2500 mV) 미만이 되어
+// lookup_ocv_permille()이 0을 반환했다. 즉 OCV 재보정 경로를 탈 때마다 SOC가 0%로 고정됐다.
+// BMS_SOC_Init() 직후 첫 갱신과 10분 무부하 이후가 모두 이 경로다.
 static float average_cell_voltage_mV(void)
 {
-    float top_avg = (float)BMS[TOP].Battery_Voltage_Sum / 16.0f;
-    float bot_avg = (float)BMS[BOT].Battery_Voltage_Sum / 16.0f;
+    float top_avg = ((float)BMS[TOP].Battery_Voltage_Sum * 10.0f) / 16.0f;
+    float bot_avg = ((float)BMS[BOT].Battery_Voltage_Sum * 10.0f) / 16.0f;
 
     return (top_avg + bot_avg) / 2.0f;
 }

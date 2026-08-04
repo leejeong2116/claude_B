@@ -40,9 +40,11 @@ BMS_FanControl_Init()
 while(1):
   Handle_Wakeup_Event()  ← re-syncs BQ sleep mask after an ALERT-pin wakeup
   LV_BMS_WHILE_RUN()     ← read all BQ data + update SOC + sync shared hardware data
+  BMS_Protect_Update()   ← MCU-side supervisor: cross-check cutoff path, drive BOTHOFF
   BMS_FanControl_Update()
   BMS_CAN_SendRunData(TOP/BOT)
-  LV_STAT()              ← LED status: red=fault (protection, permanent-fail, or I2C/CRC comm error), green=normal
+  BMS_CAN_SendProtectDiag()
+  LV_STAT()              ← LED status: red=BQ fault, green=normal, blue=MCU asserted BOTHOFF, TOP_RED=latched
   Enter_Sleep_Sequence() ← paces the loop and chooses MCU SLEEP/STOP1/SHUTDOWN based on no-load time
 ```
 
@@ -53,12 +55,92 @@ while(1):
 | File | Purpose |
 |---|---|
 | `B_BMS.c` | BQ769x2 I2C driver (read/write with CRC8), voltage/current/temp readback, fan control, protection status parsing |
-| `B_BMS_init.c` | One-time BQ769x2 register configuration (called from `BMS_MAIN_RUN`). TOP and BOT run the identical register-write sequence — there is no per-board branch |
+| `B_BMS_init.c` | One-time BQ769x2 register configuration (called from `BMS_MAIN_RUN`). **TOP and BOT differ** — see "Per-board configuration" below |
+| `B_BMS_protect.c` | MCU-side protection supervisor: cross-checks the BQ cutoff path, watches comms, drives BOTHOFF. See "FET cutoff path" below |
 | `B_BMS_cmd.h` | All BQ769x2 data-memory register addresses and direct/subcommand codes |
 | `B_BMS_power_mode.c` | MCU and BQ sleep/wakeup sequencing: SLEEP → STOP1 (after 1 hr no load) → SHUTDOWN (after 3 days) |
 | `B_BMS_soc.c` | Pack SOC estimation: coulomb counting off the BQ769x2's CC2-based accumulated-charge integrator, re-anchored to an OCV lookup after long rest periods |
 | `B_TEST_BMS.c` | Extended diagnostics readout (CB status, snapshots) |
 | `B_TEST_BMS_can.c` | CAN telemetry — run data and full test/diagnostic frames |
+
+### FET cutoff path (the most important thing to understand in this repo)
+
+The two chips do **not** each drive their own FETs. Only TOP drives the pack's CHG/DSG gates.
+BOT reaches those FETs through pins and opto-isolators, not through the MCU:
+
+```
+MCU PA15 (open-drain + external pull-up)
+   │  BQ769x2_BOTHOFF() / _RESET()
+   ▼
+BOT.DFETOFF (BOTHOFF, active-H)
+   ├─ BOT.DCHG (active-H, High when CHG FET should be off) ──G3VM──▶ TOP.CFETOFF ──▶ CHG FET off
+   └─ BOT.DDSG (active-H, High when DSG FET should be off) ──G3VM──▶ TOP.DFETOFF ──▶ DSG FET off
+```
+
+Consequences:
+
+- **Selective cutoff (CHG-only / DSG-only) is a hardware path, not software.** The MCU has exactly
+  one cutoff output (BOTHOFF), which always kills both. Never try to implement selective cutoff
+  in the MCU; let the BQ pins do it.
+- **All current-based protections (OCC/OCD1/OCD2/OCD3/SCD/OCDL/SCDL) can only trip on BOT** — TOP
+  has no shunt (SRP/SRN unused). They reach the FETs only via the DCHG/DDSG → CFETOFF/DFETOFF path.
+- **The MCU pin is fail-safe.** On MCU reset the open-drain pin goes Hi-Z and the external pull-up
+  asserts BOTHOFF. `LV_BMS_MAIN_RUN()` re-asserts it for the duration of init and only releases it
+  after confirming both chips respond.
+- G3VM propagation delay dominates the fast protections. **SCD is configured at 450 µs but the real
+  cutoff time is set by the opto-isolator**, which is typically far slower — verify against the G3VM
+  datasheet before relying on SCD for short-circuit protection.
+
+`B_BMS_protect.c` supervises this path. Its rule: BQ handles selective cutoff; the MCU only handles
+what BQ cannot see (comm loss, path failure, measurement-chain inconsistency) and its only action is
+BOTHOFF. Trip reasons are in `BMS_TripReason_t` and go out on CAN `0x080`.
+
+The `CHGFET_MASK_*` / `DSGFET_MASK_*` constants in `B_BMS_init.h` are the single source of truth:
+`B_BMS_init.c` writes them to the chip, and `B_BMS_protect.c` ANDs them against `SafetyStatus A/B/C`
+to compute whether a FET *should* be off. **Changing one without the other silently breaks the
+cross-check.**
+
+### Per-board configuration (`B_BMS_init.c`)
+
+`BQ769x2_Init()` picks a `BQ_BoardConfig_t` (`BQ_CFG_TOP` / `BQ_CFG_BOT`) based on the unit pointer.
+Everything else in the sequence is identical for both boards. The board-specific registers are
+`CFETOFFPinConfig`, `DFETOFFPinConfig`, `DCHGPinConfig`, `DDSGPinConfig`, `TS3Config`, and
+`ChgPumpControl` — see the comment block at the top of that file for the derivation of each value
+and for which ones still need hardware verification.
+
+Two open items are flagged there as `TODO` rather than silently decided:
+- `BQ_CFG_TOP.chg_pump` — the WSC report and the `FETOptions` comment disagree on whether TOP's
+  charge pump is used. Measure the high-side gate voltage.
+- `B_BMS_HWD_PROTECTION_ENABLE` — HWDF trips after 60 s of MCU silence, which collides with
+  `Enter_Sleep_Sequence()` sleeping indefinitely. Default is unchanged (enabled); the real fix is
+  an RTC periodic wake.
+
+### Voltage/current units (`DAConfiguration`)
+
+`DAConfiguration` is `0x06`: **centivolt (10 mV) user-volts, centiamp (10 mA) user-amps.**
+
+The volts half is not a free choice. Per TRM Table 13-15 (SLUUCW9 p.159), `Stack Voltage` (0x34),
+`PACK Pin Voltage` (0x36) and `LD Pin Voltage` (0x38) are reported in "user-volts" and must fit a
+**signed** 16-bit integer, so millivolt units saturate at 32767 mV. Each chip measures 16S (up to
+67.2 V), so millivolts are not usable here — `USER_VOLTS_CV` must stay at 1.
+
+`stack_userV_to_mV()` in `B_BMS.c` applies the matching ×10. **These two must always change together.**
+
+Not everything follows user-volts — check the TRM's unit column before assuming:
+
+| Value | Unit | Follows `DAConfiguration`? |
+|---|---|---|
+| Cell voltages (0x14–0x32) | mV | no — always mV |
+| Stack / PACK / LD voltage | userV | **yes** |
+| `Battery Voltage Sum` (DASTATUS5 bytes 8–9) | cV | no — always 10 mV |
+| Min/Max Cell Voltage (DASTATUS5 bytes 4–7) | mV | no |
+| CC1/CC3 current, accumulated charge | userA / userAh | **yes** |
+| Min Blow Fuse V, Shutdown Stack V, Sleep Charger V, PACK-TOS deltas | 10 mV | no |
+| CUV/COV thresholds | 50.6 mV steps | no |
+
+The current half (`USER_AMPS`) is assumed to be 10 mA in several places — `Is_No_Load()`'s `1000`
+= 10 A, the userAh→mAh scaling in `B_BMS_soc.c`, and the OCC/OCD/SCD threshold comments in
+`B_BMS_init.c`. Do not change bits 1:0 without auditing all of them.
 
 ### I2C communication
 
@@ -99,6 +181,7 @@ IDs follow `datasheets/bms_can_id_spec.csv`, defined as `CANID_*` macros at the 
 | COV snapshot ×16 (4 frames) | `0x061`–`0x064` | `0x074`–`0x077` |
 | CB_Status2 ×16 (4 frames) | `0x065`–`0x068` | `0x078`–`0x07B` |
 | CB_Status3 ×16 (4 frames) | `0x069`–`0x06C` | `0x07C`–`0x07F` |
+| MCU protection supervisor diagnostics | `0x080` (pack-wide, not per-board) | |
 
 Notes:
 - The FET status frame no longer carries `AlarmBits` — it's redundant with the `Alarm` field already in the status frame (`0x040`/`0x044`). `CB_Status1` was split out of that same combined frame into its own ID above.
@@ -127,10 +210,18 @@ After waking from STOP1, both `SystemClock_Config()` and `BMS_FanControl_Init()`
 
 `BMS_SOC_Update()` runs every cycle inside `LV_BMS_WHILE_RUN()`, right before `BMS_SyncSharedHardwareData()`, so both stacks see the same `SOC_Permille` value (0–1000 = 0.0–100.0 %) after sync.
 
-- **Coulomb counting**: uses the BQ769x2's own CC2-based integrator (`AccumulatedCharge_Int`/`AccumulatedCharge_Frac` from `DASTATUS6`) rather than manually integrating `Pack_Current * dt` in the MCU — the chip keeps integrating through MCU STOP1 sleep, so no samples are lost while asleep. Each cycle's delta is divided by the pack capacity (`BMS_PACK_CAPACITY_mAh`, 24 Ah) to update SOC.
+- **Cell**: Samsung SDI INR21700-50S (5000 mAh typ, 3.6 V nominal, 4.20 V charge, 2.5 V cutoff).
+  `BMS_PACK_CAPACITY_mAh` is `BMS_CELL_CAPACITY_mAh × BMS_PACK_PARALLEL_COUNT`. **The parallel count
+  is not confirmed** — the old comment said 30S4P while the hardware is 16S×2 = 32S, so the series
+  count already disagreed. Fix `BMS_PACK_PARALLEL_COUNT` once the pack build is settled.
+- **Coulomb counting**: uses the BQ769x2's own CC2-based integrator (`AccumulatedCharge_Int`/`AccumulatedCharge_Frac` from `DASTATUS6`) rather than manually integrating `Pack_Current * dt` in the MCU — the chip keeps integrating through MCU STOP1 sleep, so no samples are lost while asleep. Each cycle's delta is divided by the pack capacity to update SOC.
 - **OCV re-anchoring**: once `no_load_time_ms` (tracked in `B_BMS_power_mode.c`) exceeds `BMS_SOC_OCV_REST_MS` (10 min), cell voltages are assumed to have relaxed to open-circuit, and SOC is overwritten from an OCV→SOC lookup table instead of the coulomb-counted value. This bounds long-run coulomb-counting drift.
 - `BMS_SOC_Init()` (called once from `main()` after `LV_BMS_MAIN_RUN()`) resets the estimator so the first `BMS_SOC_Update()` call seeds SOC from OCV rather than an assumed baseline.
-- The OCV table in `B_BMS_soc.c` is an approximate NMC Li-ion curve sized to the CUV/COV thresholds in `B_BMS_init.c` (~2.53 V–4.20 V) — **replace it with the actual cell's characterization data before relying on it for the race.**
+- The OCV table in `B_BMS_soc.c` has **only its two endpoints from the datasheet**. The 50S datasheet
+  contains no discharge-voltage curve (§7.8/7.9 are capacity-percentage tables, and the figures are
+  dimensional/packaging drawings), so the mid-curve shape is a generic high-power NMC approximation
+  anchored to 4.20 V / 3.6 V nominal / 2.5 V cutoff. **Replace it with measured OCV data before
+  relying on it for the race** — see `HARDWARE_VERIFICATION.md` §3-1 for the measurement procedure.
 
 ### Examples directory
 
@@ -144,3 +235,10 @@ After waking from STOP1, both `SystemClock_Config()` and `BMS_FanControl_Init()`
 - The BQ769x2 alarm bit 0x0080 (ADSCAN) gates voltage/current reads in `BQ769x2_ReadData()`; data is only refreshed when the ADC scan completes
 - `BQ769x2_Init()` must be called after `CommandSubcommands(BQ769x2_RESET)` with sufficient delay (~60 ms)
 - Do not call `BQ769x2_ReadFETStatus()` on the BOT unit; it guards against this internally
+- `CHGFET_MASK_*`/`DSGFET_MASK_*` (`B_BMS_init.h`) must match what `B_BMS_init.c` writes to the chip
+- The MCU's only cutoff action is BOTHOFF (all FETs). Selective cutoff belongs to the BQ pin path
+- Never send `PF_RESET` automatically — permanent failures require human inspection
+- `OCDL`/`SCDL` latch and need explicit `OCDL_RECOVER`/`SCDL_RECOVER`; without them the pack locks out
+  permanently (`recover_latched_protections()` in `B_BMS_protect.c` handles this)
+- Timeouts in `B_BMS_protect.c` are counted in loop cycles, not ms — `HAL_GetTick()` is unusable
+  because `HAL_SuspendTick()` stops SysTick before every low-power entry

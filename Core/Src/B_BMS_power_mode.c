@@ -8,6 +8,7 @@
 #include "B_BMS_power_mode.h"
 #include "B_BMS.h"
 #include "B_BMS_cmd.h"
+#include "B_BMS_protect.h"
 
 #define BMS_NORMAL_SCAN_PERIOD_MS 63U //normal / 63ms scan
 #define BMS_SLEEP_SCAN_PERIOD_MS 5000U // sleep / 5s scan
@@ -60,7 +61,13 @@ void Enter_Sleep_Sequence(void)
     bool protections_triggered = (BMS[BOT].ProtectionsTriggered != 0U) ||
                                   (BMS[TOP].ProtectionsTriggered != 0U);
 
-    if (!Is_No_Load() || protections_triggered) {
+    // MCU 감시자가 개입한 상태에서는 절대로 자면 안 된다.
+    // 예: 통신 두절로 BOTHOFF를 건 경우 ProtectionsTriggered는 (읽을 수 없으니) 0이고
+    //     Pack_Current도 낡은 0이라 Is_No_Load()가 참이 되어, 감시자가 복구 판정을 못 하는 채로
+    //     MCU가 잠들어 버린다.
+    bool mcu_protect_active = (BMS_Protect_IsFaulted() != 0U);
+
+    if (!Is_No_Load() || protections_triggered || mcu_protect_active) {
         no_load_time_ms = 0;
         // 부하가 있을 때도 루프 주기를 일정하게 유지 (I2C/CAN이 풀 스피드로 폭주하지 않도록)
         HAL_Delay(BMS_NORMAL_SCAN_PERIOD_MS);

@@ -19,6 +19,7 @@ void BMS_Test_ReadAll(void);
 
 void BMS_CAN_SendRunData(uint8_t board_type);
 void BMS_CAN_SendTestData(uint8_t board_type);
+void BMS_CAN_SendProtectDiag(void);   /* 0x080 — MCU 보호 감시자 상태 (팩 단위) */
 
 /* Compatibility wrappers for older test calls. */
 void T_LV_BMS_MAIN_RUN(void);
