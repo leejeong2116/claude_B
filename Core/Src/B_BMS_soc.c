@@ -20,16 +20,20 @@
 //   3.5 Rated charge                : CCCV 6A, 4.20 V
 //   3.9 Discharge cut-off           : 2.5 V
 //
-// SOC 계산에는 실사용 조건에 가까운 정격 용량(4,800 mAh)이 아니라 보수적으로 잡을지, 표준 용량
-// (5,000 mAh)을 쓸지 선택이 필요하다. 여기서는 표준 용량을 쓰되 아래 상수로 분리해 두었다.
+// 팩 구성: 32S5P (확정)
+//   - 32S = 칩당 16S x BQ76972 2개. BMS 하드웨어 구성과 일치한다.
+//   - 최대 팩 전압 32 x 4.20 V = 134.4 V, 공칭 32 x 3.6 V = 115.2 V
+//     -> 2027WSC 보고서 5장의 FET 선정 근거(Vds 200 V, SOA를 140 V 기준으로 계산)와 맞는다.
+//   - 칩당 스택 전압 16 x 4.20 V = 67.2 V
+//     -> B_BMS_init.c의 SleepChargerVoltageThreshold(67.2 V) 설정과 맞는다.
+//   - 팩 용량 5,000 mAh x 5P = 25,000 mAh
 //
-// !! 확인 필요 !!
-// 병렬 수(P)를 확정해야 한다. 이전 주석은 "30S4P"라고 되어 있었는데, 본 BMS는 칩당 16S x 2 = 32S이고
-// 2027WSC 보고서도 32S 기준으로 FET을 선정했다. 직렬 수부터 서로 맞지 않으므로 P 수도 신뢰할 수 없다.
-// 팩 구성이 확정되면 BMS_PACK_PARALLEL_COUNT를 고쳐야 SOC가 맞는다.
+// 용량은 표준 방전 용량(Typ. 5,000 mAh)을 쓴다. 정격 용량(Min. 4,800 mAh)을 쓰면 SOC가 보수적으로
+// (실제보다 높게) 나오는데, 쿨롱 카운팅 분모라 주행 가능 거리 추정을 낙관적으로 만들 수 있다.
+// 셀 실측 용량이 나오면 BMS_CELL_CAPACITY_mAh를 그 값으로 교체할 것.
 #define BMS_CELL_CAPACITY_mAh   5000.0f             // INR21700-50S 표준 방전 용량 (Typ.)
-#define BMS_PACK_PARALLEL_COUNT 4.0f                // TODO: 실제 팩 병렬 수로 확정할 것
-#define BMS_PACK_CAPACITY_mAh (BMS_CELL_CAPACITY_mAh * BMS_PACK_PARALLEL_COUNT)
+#define BMS_PACK_PARALLEL_COUNT 5.0f                // 32S5P 확정
+#define BMS_PACK_CAPACITY_mAh (BMS_CELL_CAPACITY_mAh * BMS_PACK_PARALLEL_COUNT)  // 25,000 mAh
 
 #define BMS_SOC_OCV_REST_MS (10UL * 60UL * 1000UL)  // 10분 이상 무부하 지속 시 셀 전압이 OCV에 근접했다고 보고 재보정
 
