@@ -5,8 +5,8 @@ PRIMARY,0x041,BOT,"Stack_Voltage(u32,mV), Pack_Voltage(u32,mV)",셀 스택 전�
 PRIMARY,0x045,TOP,"Stack_Voltage(u32,mV), Pack_Voltage(u32,mV)",BOT 0x041과 동일 구조 (run data)
 PRIMARY,0x042,BOT,"Pack_Current(i16), MaxCellVoltage(u16,mV), MinCellVoltage(u16,mV), CellTemp(i16,0.1C)",팩 충방전 전류/셀 전압 최대·최소/대표 셀 온도 (run data)
 PRIMARY,0x046,TOP,"Pack_Current(i16, always 0), MaxCellVoltage(u16,mV), MinCellVoltage(u16,mV), CellTemp(i16,0.1C)",BOT 0x042과 동일 구조 (run data). TOP은 전류감지 핀(SRP/SRN) 미사용이라 Pack_Current는 항상 0으로 전송
-PRIMARY,0x043,BOT,SOC(u16 permille),run data SOC 프레임
-PRIMARY,0x047,TOP,SOC(u16 permille),run data SOC 프레임
+PRIMARY,0x043,BOT,"SOC(u16 permille), FanDuty(u8 %), FanTempEverValid(u8)","run data SOC 프레임. byte2=팬 duty[%], byte3=0이면 유효 온도 미수신(서미스터 미실장 의심). 팬 2개 100%=17W로 이 보드 최대 소비원이라 외부에서 관측 가능해야 함"
+PRIMARY,0x047,TOP,"SOC(u16 permille), FanDuty(u8 %), FanTempEverValid(u8)",BOT 0x043과 동일 구조
 DETAIL(셀전압),0x048-0x04B,BOT,Cell[0..15] 전압 (u16x4/frame,mV),개별 셀 16개 전압 (4프레임)
 DETAIL(셀전압),0x051-0x054,TOP,Cell[0..15] 전압 (u16x4/frame,mV),개별 셀 16개 전압 (4프레임)
 LEGACY,0x111,BOT,"Stack_Voltage(u32,mV), Pack_Voltage(u32,mV)",run data 전압 프레임과 중복 - 스프레드시트에 매칭 항목 없어 기존 ID 유지
