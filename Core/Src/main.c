@@ -32,6 +32,7 @@
 #include "B_BMS_power_mode.h"
 #include "B_BMS_soc.h"
 #include "B_BMS_protect.h"
+#include "B_BMS_rtc.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -166,6 +167,9 @@ int main(void)
   MX_TIM2_Init();
   MX_ICACHE_Init();
   /* USER CODE BEGIN 2 */
+  // 저전력 구간의 경과 시간 측정과 주기적 웨이크업에 쓴다. BQ 초기화보다 먼저 세워야
+  // 첫 슬립부터 실측 시간이 적용된다. LSE/LSI 둘 다 실패하면 조용히 폴백 동작한다.
+  BMS_RTC_Init();
   BMS_FanControl_Init();
   LV_BMS_MAIN_RUN();
   BMS_SOC_Init();

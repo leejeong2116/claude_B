@@ -23,6 +23,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "B_BMS_power_mode.h"
+#include "B_BMS_rtc.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -228,6 +229,17 @@ void EXTI9_IRQHandler(void)
 }
 
 /* USER CODE BEGIN 1 */
+/**
+  * @brief RTC 웨이크업 타이머 인터럽트.
+  *        STM32U5는 RTC 인터럽트가 NVIC에 직접 연결되어 있어 EXTI 설정이 필요 없다.
+  *        저전력 모드에서 깨어나는 것 자체가 목적이라 플래그만 지운다.
+  *        (CubeMX로 RTC를 켜게 되면 이 핸들러가 생성 코드와 중복되므로 하나를 지울 것)
+  */
+void RTC_IRQHandler(void)
+{
+    BMS_RTC_IRQHandler();
+}
+
 // 1. BMS Alert 핀에 의한 외부 인터럽트 콜백 (부하 발생 또는 결함)
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
