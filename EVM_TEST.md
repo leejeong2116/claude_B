@@ -278,6 +278,19 @@ EVM에는 실제 FET이 없어서 `FETStatus`가 실제 게이트를 반영하�
 | R5 | `BMS_Test_ReadAll()`은 `BMS_SOC_Update()`도, `comm_fail_this_cycle` 초기화도 하지 않는다. 이 경로를 쓰려면 보완 필요 | R4와 함께 |
 | R6 | `LV_STAT()`의 통신 오류 판정이 아직 전역 카운터를 본다. 보드별 `comm_fail_cycles`가 생겼으니 그쪽이 정확하다 | 사소 |
 
+### 부품 실장 확인 결과 (회로도 기준, 2026-08-04)
+
+`회로도/WSC_BMS.zip` 의 KiCad 회로도에서 확인한 것:
+
+| 부품 | 값 | 상태 |
+|---|---|---|
+| **X1** | `MU00525-32.768K` | **LSE 32.768 kHz 크리스탈 — 실장됨** (전용 footprint 지정). RTC가 LSI 폴백으로 안 빠질 것으로 예상 |
+| X2 | `CS07826-16M` | 16 MHz. 단 `.ioc` 는 `HSE_VALUE=8000000` 으로 **2배 어긋남**. 현재 `SystemClock_Config()` 가 MSI를 쓰므로 무해하지만 HSE로 전환하면 클럭이 2배 틀어진다 |
+
+- [ ] X1이 실물 보드에 **납땜되어 있는지** 육안 확인
+- [ ] 부팅 후 `BMS_RTC_IsReady()` == 1 인지 (0이면 LSI 폴백 = 3일 임계가 몇 시간씩 틀어짐)
+- [ ] `.ioc` 의 `HSE_VALUE` 를 16 MHz로 정정 (`STM32CUBEMX_TODO.md` §3-2)
+
 ### R2 상세 — PWR_EN이 12V 컨버터 RUN에 직결돼 있다
 
 `회로도/WSC_BMS.zip`의 KiCad 회로도(`WSC_BMS.kicad_sch`)에서 네트를 추적한 결과:

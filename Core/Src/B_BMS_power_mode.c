@@ -27,11 +27,21 @@ uint32_t no_load_time_ms = 0;
 volatile WakeupReason_t wakeup_reason = WAKEUP_NONE;
 extern BMS_Unit BMS[STACK];
 
+// "무부하" 판정 전류. 단위는 10 mA (DAConfiguration 의 USER_AMPS = centiamp).
+//
+// 이전 값은 1000 = 10 A 였는데, BQ 쪽 SleepCurrent 설정(B_BMS_init.c, 1000 mA = 1 A)과 10배 어긋난다.
+// 32S5P 팩에서 10 A 는 약 1.15 kW 로 주행 중에도 나올 수 있는 전류라, MCU가 "주차 중"으로 보고
+// 슬립 시퀀스를 시작하는 동안 BQ는 여전히 깨어 있는 상태가 된다.
+//
+// 두 판정이 같은 기준을 보도록 BQ의 SleepCurrent 와 맞췄다: 1 A = 100 (10 mA 단위).
+// BQ 설정을 바꾸면 이 값도 같이 바꿀 것.
+#define BMS_NO_LOAD_CURRENT_10mA 100
+
 bool Is_No_Load(void)
 {
-    int16_t current = (int16_t)BMS[BOT].Pack_Current;
+    int16_t current = BMS[BOT].Pack_Current;
 
-    return (current > -1000 && current < 1000);
+    return (current > -BMS_NO_LOAD_CURRENT_10mA && current < BMS_NO_LOAD_CURRENT_10mA);
 }
 /*
 void Configure_BMS_Sleep_Mask(void)
