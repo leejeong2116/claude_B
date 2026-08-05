@@ -19,9 +19,14 @@ uint8_t LV_BMS_initOK = 0;
 uint16_t LV_BMS_running = 0;
 BMS_Unit BMS[STACK] = {0};
 
-// 팬은 2개다 (2027WSC 보고서 MCU 핀 표: PA1 = FAN1_PWM / TIM2 ch2, PA2 = FAN2_PWM / TIM2 ch3).
-// tim.c의 MX_TIM2_Init()이 두 채널 모두 PWM으로 설정하고 두 핀 모두 AF로 초기화하는데,
-// 이전에는 ch2만 Start/SetCompare 해서 FAN2가 전혀 돌지 않았다. 두 팬을 같은 duty로 구동한다.
+// 실제로 장착된 팬 개수. 2027WSC 보고서 MCU 핀 표와 KiCad 회로도는 팬 2개분을 배선해 두었지만
+// (PA1 = FAN1_PWM / TIM2 ch2, PA2 = FAN2_PWM / TIM2 ch3), 실물에는 1개만 장착된다
+// (2026-08-04 확인). 없는 팬 채널을 구동해 봐야 의미가 없으므로 ch2만 쓴다.
+//
+// 나중에 두 번째 팬을 달면 이 값만 2로 바꾸면 된다 — .ioc와 회로도는 이미 준비돼 있고
+// tim.c의 MX_TIM2_Init()도 두 채널 모두 PWM으로 설정해 둔 상태다.
+#define BMS_FAN_COUNT 1
+
 #define BMS_FAN1_PWM_CHANNEL TIM_CHANNEL_2
 #define BMS_FAN2_PWM_CHANNEL TIM_CHANNEL_3
 #define BMS_FAN_OFF_TEMP_C 33.0f
@@ -137,9 +142,9 @@ static uint8_t fan_duty_from_temp(float temp_c, uint8_t valid)
     if (valid == 0U) {
         // 온도를 못 읽는 경우의 처리.
         //
-        // 팬 2개를 100%로 돌리면 17 W다 (9WPA0812P4G001, 12 V x 0.71 A x 2).
-        // MCU 전체가 8.6 mW인 것과 비교하면 이 보드에서 압도적으로 큰 소비원이고,
-        // 무부하로 3일 방치되면 1,224 Wh = 팩(2,880 Wh)의 42%를 팬이 먹는다.
+        // 팬을 100%로 돌리면 8.52 W다 (9WPA0812P4G001, 12 V x 0.71 A).
+        // MCU 전체가 8.6 mW인 것과 비교하면 약 1,000배로 이 보드에서 압도적으로 큰 소비원이고,
+        // 무부하로 3일 방치되면 613 Wh = 팩(2,880 Wh)의 21%를 팬이 먹는다.
         //
         // 그래서 "못 읽는다"를 두 경우로 나눈다:
         //   - 한 번도 못 읽었다  -> 서미스터 미실장/미배선일 가능성이 높다. 냉각할 대상이 뜨겁다는
@@ -857,7 +862,9 @@ void BMS_FanControl_SetDuty(uint8_t duty_percent)
     }
 
     __HAL_TIM_SET_COMPARE(&htim2, BMS_FAN1_PWM_CHANNEL, pulse);
+#if BMS_FAN_COUNT >= 2
     __HAL_TIM_SET_COMPARE(&htim2, BMS_FAN2_PWM_CHANNEL, pulse);
+#endif
     BMS_FanDuty = duty_percent;
 }
 
@@ -870,7 +877,9 @@ void BMS_FanControl_Init(void)
 {
     BMS_FanControl_SetDuty(0U);
     HAL_TIM_PWM_Start(&htim2, BMS_FAN1_PWM_CHANNEL);
+#if BMS_FAN_COUNT >= 2
     HAL_TIM_PWM_Start(&htim2, BMS_FAN2_PWM_CHANNEL);
+#endif
 }
 
 void BMS_FanControl_Update(void)

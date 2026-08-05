@@ -174,7 +174,7 @@ void BMS_CAN_SendRunData(uint8_t board_type)
     bms_can_send(pick_id(board_type, CANID_CURRENT_BOT, CANID_CURRENT_TOP), BMS_TxData);
 
     /* 팬 상태를 이 프레임의 남는 자리에 싣는다 (byte 2~7이 전부 0으로 낭비되고 있었다).
-     * 팬은 이 보드에서 압도적으로 큰 소비원이라(2개 100% = 17 W, MCU는 8.6 mW) 실제로 몇 %로
+     * 팬은 이 보드에서 압도적으로 큰 소비원이라(100% = 8.52 W, MCU는 8.6 mW) 실제로 몇 %로
      * 돌고 있는지 밖에서 보이지 않으면 전력이 새는 것을 알 수 없다.
      * temp_valid = 0이면 유효 온도를 한 번도 못 읽은 상태 = 서미스터 미실장 의심. */
     put_u16_be(BMS_TxData, 0, current_unit->SOC_Permille);
