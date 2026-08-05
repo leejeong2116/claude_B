@@ -204,7 +204,13 @@ TIM2 CH2 PWM drives the cooling fan. **TIM2 is reserved for fan — do not use i
 
 After waking from STOP1, both `SystemClock_Config()` and `BMS_FanControl_Init()` (re-starts TIM2 PWM) must be called — this is already done in `B_BMS_power_mode.c`.
 
-"No load" is defined as `|Pack_Current| < 1000` (units: 10 mA steps from BQ, so < 10 A).
+"No load" is `|Pack_Current| < BMS_NO_LOAD_CURRENT_10mA` (100 = 1 A; the unit is 10 mA steps from the
+BQ). This deliberately matches the BQ's own `SleepCurrent` setting in `B_BMS_init.c` — the two decide
+the same thing from opposite sides, and they were previously out by a factor of ten. **Change them
+together.**
+
+Elapsed time across sleep is measured with the RTC (`B_BMS_rtc.c`), not assumed. See the header there
+for why, and for how to migrate it onto a CubeMX-generated HAL RTC later.
 
 ### SOC estimation (`B_BMS_soc.c`)
 
