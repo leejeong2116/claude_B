@@ -7,6 +7,44 @@ CubeMX(`.ioc`)를 열어서 해야 할 일과, 그때 주의할 것들.
 
 ---
 
+## 0. 다음에 CubeIDE를 켜면 할 일 (2026-08-10 변경분)
+
+RTC·팬·보호 임계를 고쳤는데 **PC에서는 문법 검사까지만** 했다. 실제 빌드와 칩 동작은 확인이 안 됐다.
+아래를 위에서부터 순서대로.
+
+**① 새 파일 2개가 빌드에 들어가는지**
+`Core/Src/B_BMS_fan.c` · `Core/Inc/B_BMS_fan.h` 가 이번에 새로 생겼다.
+CubeIDE는 `Core` 폴더를 통째로 스캔하므로 보통 그냥 잡히지만, Project Explorer에 안 보이면
+프로젝트를 선택하고 **F5(Refresh)**. `.cproject` 는 손댈 필요 없다.
+
+- [ ] 빌드 (Ctrl+B) 에러 0 — PC에서는 `-fsyntax-only` 와 오브젝트 컴파일까지만 했고 **링크는 안 해봤다**
+
+**② 플래시 후 BQ 레지스터를 읽어서 확인** (바탕화면 Battery Management Studio)
+소스를 고쳐도 `BQ769x2_SetRegister()` 쓰기가 실패하면 칩은 **옛 값 그대로 조용히 동작한다**.
+반드시 읽어서 확인할 것.
+
+| 레지스터 | 기대값 | 왜 바꿨나 |
+|---|---|---|
+| `Protections:OCC:Threshold` | **12 mV** (=30 A) | 셀 연속 충전 정격 6 A × 5P |
+| `Protections:OTD:Recovery` | **55 ℃** | 데이터시트 "재방전 해제 <60 ℃" 필수 조항 |
+| `Protections:OTC:Threshold` | 60 ℃ (그대로) | 대조만 |
+
+**③ RTC가 LSE로 도는지** — `BMS_RTC_IsReady()` 로는 판별이 안 된다 (LSI 폴백도 1을 준다)
+
+- [ ] 디버거에서 `BMS_RTC_ClockSource()` == 1(`BMS_RTC_CLK_LSE`) 확인. 2면 LSI 폴백
+
+**④ 팬 두 가지 시험** (`EVM_TEST.md` 참조)
+
+- [ ] 서미스터 커넥터 분리 후 부팅 → 팬 **정지** (미실장으로 판정)
+- [ ] 정상 부팅 뒤 I2C 분리 → 팬 **100 %** (센서 고장으로 판정)
+
+**⑤ TS1 부착 위치 육안 확인** — 온도 임계 전체가 이 전제 위에 있다 (`EVM_TEST.md` 🌡 절)
+
+**⑥ CubeMX 재생성 시 주의** — `.ioc` 는 이번에 건드리지 않았다.
+`main.c` 에 넣은 `#include "B_BMS_fan.h"` 는 `USER CODE BEGIN Includes` 안에 있어 재생성해도 살아남는다 (확인함).
+
+---
+
 ## 1. 재생성하면 어떻게 되나 (먼저 읽을 것)
 
 현재 `.ioc`의 코드 생성 설정:
@@ -22,6 +60,7 @@ CubeMX(`.ioc`)를 열어서 해야 할 일과, 그때 주의할 것들.
 
 ```
 Core/Src/B_BMS.c              Core/Inc/B_BMS.h
+Core/Src/B_BMS_fan.c          Core/Inc/B_BMS_fan.h
 Core/Src/B_BMS_init.c         Core/Inc/B_BMS_init.h
 Core/Src/B_BMS_protect.c      Core/Inc/B_BMS_protect.h
 Core/Src/B_BMS_soc.c          Core/Inc/B_BMS_soc.h
@@ -133,7 +172,8 @@ MemoryManagement  NonMaskableInt  PendSV  SVCall  SysTick  UsageFault
 그리고 **`stm32u5xx_it.c`의 `RTC_IRQHandler()`를 삭제**할 것 — CubeMX가 생성해 준다. 안 지우면 중복 정의로 링크 에러.
 
 - [ ] 위 작업 완료
-- [ ] `BMS_RTC_IsReady()`가 1인지 확인 (LSE 기동 성공)
+- [ ] `BMS_RTC_ClockSource()`가 `BMS_RTC_CLK_LSE`(1)인지 확인 (LSE 기동 성공)
+      — `BMS_RTC_IsReady()` 는 LSI 폴백일 때도 1이라 구분이 안 된다
 - [ ] 무부하 방치 시 30초 주기로 깨어나는지 (CAN 프레임 간격)
 
 ---
