@@ -8,6 +8,9 @@ Bare-metal STM32U545CEUXQ (ARM Cortex-M33) firmware for a 2-stack Battery Manage
 
 **Target hardware:** STM32U545CEUXQ — 512 KB Flash, 272 KB RAM, running at ~160 MHz (MSI → PLL).
 
+Open work is indexed in `TODO.md` — what is blocked on a measurement, on hardware, or on a team
+decision, and what is already settled so it does not get re-litigated.
+
 ## Build and Flash
 
 This is an STM32CubeIDE project. Build and flash from within the IDE using the standard Debug/Release build configurations.
