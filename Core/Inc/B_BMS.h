@@ -19,6 +19,11 @@ extern "C" {
 #define BOT 1
 #define STACK 2
 
+// 두 칩이 물리 하드웨어를 나눠 쓴다. 션트는 BOT에만, FET 게이트는 TOP에만 붙어 있어
+// 전류/쿨롱카운터는 BOT, FET 상태/온도는 TOP 값만 유효하다 (자세한 내용은 CLAUDE.md).
+#define BMS_CURRENT_BOARD BOT
+#define BMS_FET_BOARD TOP
+
 #define CRC_Mode 1
 #define MAX_BUFFER_SIZE 64
 
@@ -133,6 +138,10 @@ typedef struct _BMS_Unit {
     // LV_BMS_WHILE_RUN()이 사이클 시작에 지우고 끝에 comm_fail_cycles로 집계한다.
     uint8_t comm_fail_this_cycle;
     uint16_t comm_fail_cycles;   // 연속 실패 사이클 수 (성공하면 0)
+
+    // 타당한 온도를 한 번이라도 읽었는가. BMS[]는 0 초기화라 온도 초기값 0.0f가
+    // 타당 범위(-40~130) 안이고, 그래서 값만 봐서는 미읽음과 0도를 구별할 수 없다.
+    uint8_t temp_ever_valid;
 } BMS_Unit;
 
 extern BMS_Unit BMS[STACK];
@@ -180,12 +189,7 @@ void BQ769x2_ReadLargeSubcommand(BMS_Unit *unit, uint16_t command, uint16_t *des
 void BQ769x2_Read_Extra_Direct(BMS_Unit *unit);
 void BQ769x2_Read_Snapshots(BMS_Unit *unit);
 
-void BMS_FanControl_Init(void);
-void BMS_FanControl_Update(void);
-void BMS_FanControl_SetDuty(uint8_t duty_percent);
-uint8_t BMS_FanControl_GetDuty(void);
-// 0이면 아직 유효한 온도를 한 번도 못 읽었다는 뜻 (서미스터 미실장 의심). 팬은 정지 상태로 둔다.
-uint8_t BMS_FanControl_TempEverValid(void);
+/* 팬 제어는 B_BMS_fan.h 로 분리했다. */
 
 uint8_t Check_BMS_Sleep_State(BMS_Unit *unit);
 void delayUS(uint32_t us);

@@ -7,6 +7,7 @@
 
 #include "B_BMS_power_mode.h"
 #include "B_BMS.h"
+#include "B_BMS_fan.h"
 #include "B_BMS_cmd.h"
 #include "B_BMS_protect.h"
 #include "B_BMS_rtc.h"
