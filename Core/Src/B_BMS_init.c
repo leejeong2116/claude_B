@@ -290,11 +290,11 @@ void BQ769x2_Init(BMS_Unit* unit)
 	BQ769x2_SetRegister(unit, COVLLatchLimit, 0x05, 1); // [5CNT] 실험 후 사용 안함
 	BQ769x2_SetRegister(unit, COVLCounterDecDelay, 0x0A, 1); // [10s] 실험 후 사용 안함
 	BQ769x2_SetRegister(unit, COVLRecoveryTime, 0x14, 1); // [20s] 실험 후 사용 안함
-	// 32S5P 기준 셀당 10A. INR21700-50S 데이터시트 3.8은 10A를 "step charge" 한도로, 연속 충전은 6A로
-	// 규정한다(=5P에서 30A). 즉 이 임계는 연속 충전 정격을 넘는 구간을 잡지 못한다.
-	// 태양광 어레이 충전 전류는 이보다 훨씬 낮을 것으로 보이나, 회생 제동이 지속되는 구간이 있다면
-	// 30A 기준으로 낮출지 검토할 것. (임계를 바꾸면 SOCC PF 70A와의 순서도 함께 확인)
-	BQ769x2_SetRegister(unit, OCCThreshold, 0x0A, 1); // [20mV] // max charge current 10A -> 5p -> 50A ,shunt register 0.4m -> 50*0.4m = 20mV
+	// INR21700-50S 3.8: 연속 충전 6A / step charge 10A. OCC는 지연 425.7ms짜리 연속전류 보호이므로
+	// 연속 정격을 기준으로 잡는다 -> 5P에서 30A. (옛 값 50A는 step charge 한도를 쓴 것이라
+	// 6A 연속 정격을 넘는 충전을 잡지 못했다. 데이터시트 Note(*1)와 BWSC 규정 2.5.6이 요구하는
+	// "제조사 범위 안" 설정에 어긋난다.) SOCC PF 70A와의 순서는 유지된다.
+	BQ769x2_SetRegister(unit, OCCThreshold, 0x06, 1); // [12mV] // 30A × 0.4mΩ = 12mV, 2mV/LSB
 	BQ769x2_SetRegister(unit, OCCDelay, 0x7F, 1); // [419.1+6.6 = 425.7ms]
 	BQ769x2_SetRegister(unit, OCCRecoveryThreshold, 0xFC18, 2); // [-1A] = [65536-1000mA]
 	BQ769x2_SetRegister(unit, OCCPACKTOSDelta, 0x00C8, 2); // [2V = 200 × 10mV]
@@ -316,12 +316,22 @@ void BQ769x2_Init(BMS_Unit* unit)
 	BQ769x2_SetRegister(unit, SCDLCounterDecDelay, 0x0A, 1); // [10s]
 	BQ769x2_SetRegister(unit, SCDLRecoveryTime, 0x14, 1); // [20s]
 	BQ769x2_SetRegister(unit, SCDLRecoveryThreshold, 0xFE0C, 2); // [-500mA]
-	BQ769x2_SetRegister(unit, OTCThreshold, 0x3C, 1); // [60`C]
+	// ★ 아래 온도 임계는 "TS1이 팩에서 가장 뜨거운 셀의 표면에 붙어 있다"는 전제 위에 있다.
+	//   INR21700-50S 데이터시트는 재는 위치에 따라 허용 범위를 나눠 적는다:
+	//     3.14 주위(Ambient) : 충전 0~60도  / 방전 -20~60도
+	//     3.15 표면(Surface) : 충전 0~60도  / 방전 -20~80도 (재방전 해제 <60도 필수)
+	//   Note(*2)가 "온도 상승이 가장 큰 셀 표면 기준으로 보호를 설정하라"고 요구하므로 3.15를 쓴다.
+	//   서미스터가 공기를 재는 위치로 바뀌면 상한이 60도로 내려가므로 OTD 65도는 그대로 쓸 수 없다.
+	//   -> 배치를 바꾸면 이 블록을 반드시 다시 볼 것 (EVM_TEST.md 0장 체크 항목).
+	BQ769x2_SetRegister(unit, OTCThreshold, 0x3C, 1); // [60`C] 3.15 충전 상한
 	BQ769x2_SetRegister(unit, OTCDelay, 0x05, 1); // [5s]
-	BQ769x2_SetRegister(unit, OTCRecovery, 0x37, 1); // [55`C] // 셀 권장 재충전 온도 45
-	BQ769x2_SetRegister(unit, OTDThreshold, 0x41, 1); // [65`C]
+	// 데이터시트 권장 재충전 해제는 45도. 55도는 그보다 높으나 "권장"이라 우선 유지한다.
+	BQ769x2_SetRegister(unit, OTCRecovery, 0x37, 1); // [55`C]
+	BQ769x2_SetRegister(unit, OTDThreshold, 0x41, 1); // [65`C] 표면 기준 상한 80도 이내
 	BQ769x2_SetRegister(unit, OTDDelay, 0x05, 1); // [5s]
-	BQ769x2_SetRegister(unit, OTDRecovery, 0x3C, 1); // [60`C]
+	// 3.15의 "재방전 해제 <60도"는 권장이 아니라 필수라 60도로는 만족하지 않는다.
+	// 55도는 주위온도 해석(상한 60도)에서도 유효하므로 서미스터 배치가 바뀌어도 안전하다.
+	BQ769x2_SetRegister(unit, OTDRecovery, 0x37, 1); // [55`C]
 	BQ769x2_SetRegister(unit, OTFThreshold, 0x64, 1); // [100`C]
 	BQ769x2_SetRegister(unit, OTFDelay, 0x05, 1); // [5s]
 	BQ769x2_SetRegister(unit, OTFRecovery, 0x5A, 1); // [90`C] // recovery 95면 금방 복구되고 다시 반복할 것 같아서 좀 더 내림
