@@ -55,8 +55,9 @@
 #define CANID_COULOMB2_TOP          0x058U
 #define CANID_COULOMB3_BOT          0x050U
 #define CANID_COULOMB3_TOP          0x059U
-#define CANID_SOC_TEST_BOT          0x133U /* legacy */
-#define CANID_SOC_TEST_TOP          0x233U /* legacy */
+/* TEST용 SOC — legacy. RUN 0x043과 마찬가지로 팩 단위라 하나만 보낸다.
+ * 0x233은 예약(미사용). 이전에는 0x133과 바이트 단위로 완전히 동일한 프레임을 보냈다. */
+#define CANID_PACK_SOC_TEST         0x133U
 #define CANID_CUV_BASE_BOT          0x05DU /* 4 frames: 0x05D-0x060 */
 #define CANID_CUV_BASE_TOP          0x070U /* 4 frames: 0x070-0x073 */
 #define CANID_COV_BASE_BOT          0x061U /* 4 frames: 0x061-0x064 */
@@ -345,11 +346,14 @@ void BMS_CAN_SendTestData(uint8_t board_type)
     put_u16_be(BMS_TxData, 4, unit->Battery_Voltage_Sum);
     bms_can_send_len(pick_id(board_type, CANID_COULOMB3_BOT, CANID_COULOMB3_TOP), BMS_TxData, FDCAN_DLC_BYTES_6);
 
-    put_u16_be(BMS_TxData, 0, current_unit->SOC_Permille);
-    put_u16_be(BMS_TxData, 2, 0);
-    put_u16_be(BMS_TxData, 4, 0);
-    put_u16_be(BMS_TxData, 6, 0);
-    bms_can_send(pick_id(board_type, CANID_SOC_TEST_BOT, CANID_SOC_TEST_TOP), BMS_TxData);
+    /* RUN 쪽 0x043과 같은 이유로 팩 단위다 — BOT 호출에서 한 번만 보낸다. 0x233은 예약. */
+    if (board_type == BMS_CAN_PACK_FRAME_BOARD) {
+        put_u16_be(BMS_TxData, 0, current_unit->SOC_Permille);
+        put_u16_be(BMS_TxData, 2, 0);
+        put_u16_be(BMS_TxData, 4, 0);
+        put_u16_be(BMS_TxData, 6, 0);
+        bms_can_send(CANID_PACK_SOC_TEST, BMS_TxData);
+    }
 
     send_u16_array(pick_id(board_type, CANID_CUV_BASE_BOT, CANID_CUV_BASE_TOP), unit->CUV_Snapshot);
     send_u16_array(pick_id(board_type, CANID_COV_BASE_BOT, CANID_COV_BASE_TOP), unit->COV_Snapshot);
