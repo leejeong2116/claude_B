@@ -19,8 +19,15 @@
 #define CANID_VOLTAGE_TOP           0x045U
 #define CANID_CURRENT_BOT           0x042U
 #define CANID_CURRENT_TOP           0x046U
-#define CANID_SOC_RUN_BOT           0x043U
-#define CANID_SOC_RUN_TOP           0x047U
+/* SOC/팬 — 팩 단위 프레임. 보드별 쌍이 아니라 하나만 보낸다.
+ * SOC는 32S 직렬 스트링 하나의 속성이고(모든 셀에 같은 전류), 팬도 팩 단위다.
+ * BMS_CAN_SendRunData()가 두 번 호출되므로 아래 보드의 호출에서만 송신한다. */
+#define CANID_PACK_SOC_FAN          0x043U
+#define BMS_CAN_PACK_FRAME_BOARD    BOT
+
+/* 0x047 — 예약(미사용).
+ * 이전에는 0x043과 바이트 단위로 완전히 동일한 SOC 프레임을 여기로도 보냈다. 중복이라 제거했고,
+ * 뒤쪽 ID를 당기면 이미 배포된 명세가 전부 어긋나므로 자리는 비워 둔다. 재사용하지 말 것. */
 
 #define CANID_CELLV_BASE_BOT        0x048U /* 4 frames: 0x048-0x04B */
 #define CANID_CELLV_BASE_TOP        0x051U /* 4 frames: 0x051-0x054 */
@@ -58,7 +65,15 @@
 #define CANID_CB_STATUS2_BASE_TOP   0x078U /* 4 frames: 0x078-0x07B */
 #define CANID_CB_STATUS3_BASE_BOT   0x069U /* 4 frames: 0x069-0x06C */
 #define CANID_CB_STATUS3_BASE_TOP   0x07CU /* 4 frames: 0x07C-0x07F */
-#define CANID_PROTECT_DIAG          0x080U /* 팩 단위 (보드별 아님) — MCU 보호 감시자 상태 */
+/* MCU 보호 감시자 상태 — 팩 단위 (보드별 아님).
+ *
+ * 0x080에 있었으나 0x300으로 옮겼다. 두 가지 이유:
+ *   - BMS 측정 데이터 블록(0x040~0x07F)과 성격이 다르다. 이건 진단 프레임이다.
+ *   - CAN은 ID가 낮을수록 우선순위가 높다. 진단 프레임이 실측 데이터보다 앞설 이유가 없다.
+ *
+ * !! 확인 필요 !! 0x300은 "0x310보다 작은 ID"라는 지시에 맞춰 그 바로 아래로 잡은 값이다.
+ * 차량 전체 CAN 할당표와 대조해 다른 노드와 겹치지 않는지 확인할 것. 겹치면 이 한 줄만 고치면 된다. */
+#define CANID_PROTECT_DIAG          0x300U
 
 static FDCAN_TxHeaderTypeDef BMS_TxHeader;
 static uint8_t BMS_TxData[8];
@@ -173,16 +188,23 @@ void BMS_CAN_SendRunData(uint8_t board_type)
     put_i16_be(BMS_TxData, 6, temp_to_deci_c(unit->CELL_Temp));
     bms_can_send(pick_id(board_type, CANID_CURRENT_BOT, CANID_CURRENT_TOP), BMS_TxData);
 
-    /* 팬 상태를 이 프레임의 남는 자리에 싣는다 (byte 2~7이 전부 0으로 낭비되고 있었다).
-     * 팬은 이 보드에서 압도적으로 큰 소비원이라(100% = 8.52 W, MCU는 8.6 mW) 실제로 몇 %로
-     * 돌고 있는지 밖에서 보이지 않으면 전력이 새는 것을 알 수 없다.
+    /* SOC/팬 프레임은 팩 단위라 BOT 호출에서 한 번만 보낸다.
+     *
+     * 이전에는 board_type과 무관하게 BMS[BOT]의 값을 담아 0x043과 0x047 두 ID로 보냈다.
+     * 두 프레임이 바이트 단위로 완전히 동일해 대역폭만 낭비했다. SOC는 32S 직렬 스트링 하나의
+     * 속성이라 보드별로 나눌 수 없고(모든 셀에 같은 전류가 흐른다), 팬도 팩 단위다.
+     *
+     * byte 2~7은 원래 0으로 비어 있던 자리다. 팬은 이 보드에서 압도적으로 큰 소비원인데
+     * (100% = 8.52 W, MCU는 8.6 mW) 밖에서 몇 %로 도는지 볼 방법이 없어 여기에 실었다.
      * temp_valid = 0이면 유효 온도를 한 번도 못 읽은 상태 = 서미스터 미실장 의심. */
-    put_u16_be(BMS_TxData, 0, current_unit->SOC_Permille);
-    BMS_TxData[2] = BMS_FanControl_GetDuty();        /* 팬 duty [%] */
-    BMS_TxData[3] = BMS_FanControl_TempEverValid();  /* 0 = 유효 온도 미수신 */
-    put_u16_be(BMS_TxData, 4, 0);
-    put_u16_be(BMS_TxData, 6, 0);
-    bms_can_send(pick_id(board_type, CANID_SOC_RUN_BOT, CANID_SOC_RUN_TOP), BMS_TxData);
+    if (board_type == BMS_CAN_PACK_FRAME_BOARD) {
+        put_u16_be(BMS_TxData, 0, current_unit->SOC_Permille);
+        BMS_TxData[2] = BMS_FanControl_GetDuty();        /* 팬 duty [%] */
+        BMS_TxData[3] = BMS_FanControl_TempEverValid();  /* 0 = 유효 온도 미수신 */
+        put_u16_be(BMS_TxData, 4, 0);
+        put_u16_be(BMS_TxData, 6, 0);
+        bms_can_send(CANID_PACK_SOC_FAN, BMS_TxData);
+    }
 }
 
 static uint8_t clamp_u8(uint16_t value)

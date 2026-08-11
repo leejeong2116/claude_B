@@ -5,8 +5,8 @@ PRIMARY,0x041,BOT,"Stack_Voltage(u32,mV), Pack_Voltage(u32,mV)",셀 스택 전�
 PRIMARY,0x045,TOP,"Stack_Voltage(u32,mV), Pack_Voltage(u32,mV)",BOT 0x041과 동일 구조 (run data)
 PRIMARY,0x042,BOT,"Pack_Current(i16), MaxCellVoltage(u16,mV), MinCellVoltage(u16,mV), CellTemp(i16,0.1C)",팩 충방전 전류/셀 전압 최대·최소/대표 셀 온도 (run data)
 PRIMARY,0x046,TOP,"Pack_Current(i16, always 0), MaxCellVoltage(u16,mV), MinCellVoltage(u16,mV), CellTemp(i16,0.1C)",BOT 0x042과 동일 구조 (run data). TOP은 전류감지 핀(SRP/SRN) 미사용이라 Pack_Current는 항상 0으로 전송
-PRIMARY,0x043,BOT,"SOC(u16 permille), FanDuty(u8 %), FanTempEverValid(u8)","run data SOC 프레임. byte2=팬 duty[%], byte3=0이면 유효 온도 미수신(서미스터 미실장 의심). 팬 100%=8.52W로 MCU(8.6mW)의 약 1000배, 이 보드 최대 소비원이라 외부에서 관측 가능해야 함"
-PRIMARY,0x047,TOP,"SOC(u16 permille), FanDuty(u8 %), FanTempEverValid(u8)",BOT 0x043과 동일 구조
+PRIMARY,0x043,팩단위,"SOC(u16 permille), FanDuty(u8 %), FanTempEverValid(u8)","run data SOC 프레임. byte2=팬 duty[%], byte3=0이면 유효 온도 미수신(서미스터 미실장 의심). 팬 100%=8.52W로 MCU(8.6mW)의 약 1000배, 이 보드 최대 소비원이라 외부에서 관측 가능해야 함"
+RESERVED,0x047,—,(미사용),"예약 — 비어 있음. 이전에는 0x043과 바이트 단위로 완전히 동일한 SOC 프레임을 여기로도 보냈다. SOC는 32S 직렬 스트링 하나의 속성이라 보드별로 나눌 수 없어(모든 셀에 같은 전류) 중복이었다. 뒤쪽 ID를 당기면 배포된 명세가 어긋나므로 자리는 비워 둔다. 재사용 금지"
 DETAIL(셀전압),0x048-0x04B,BOT,Cell[0..15] 전압 (u16x4/frame,mV),개별 셀 16개 전압 (4프레임)
 DETAIL(셀전압),0x051-0x054,TOP,Cell[0..15] 전압 (u16x4/frame,mV),개별 셀 16개 전압 (4프레임)
 LEGACY,0x111,BOT,"Stack_Voltage(u32,mV), Pack_Voltage(u32,mV)",run data 전압 프레임과 중복 - 스프레드시트에 매칭 항목 없어 기존 ID 유지
@@ -43,4 +43,4 @@ SD_ONLY(밸런싱),0x065-0x068,BOT,CB_Status2[0..15] 비트맵 (u16x4/frame),셀
 SD_ONLY(밸런싱),0x078-0x07B,TOP,CB_Status2[0..15] 비트맵 (u16x4/frame),BOT과 동일 구조 (4프레임)
 SD_ONLY(밸런싱),0x069-0x06C,BOT,CB_Status3[0..15] 비트맵 (u16x4/frame),셀별(16개) 밸런싱 상태 비트맵 3 (4프레임)
 SD_ONLY(밸런싱),0x07C-0x07F,TOP,CB_Status3[0..15] 비트맵 (u16x4/frame),BOT과 동일 구조 (4프레임)
-DIAG,0x080,공통(팩단위),"TripReason(u8), Flags(u8), RetryCount(u8), ChgMismatchCycles(u8), DsgMismatchCycles(u8), StackMismatchCycles(u8), TopCommFailCycles(u8), BotCommFailCycles(u8)","MCU 보호 감시자(B_BMS_protect.c) 상태. Flags: b0 BOTHOFF어서트 b1 latch b2 CHG기대OFF b3 DSG기대OFF b4 CHG실측ON b5 DSG실측ON. b2와 b4가 동시에 1이면 CHG 차단 경로(BOT.DCHG→G3VM→TOP.CFETOFF) 고장, b3와 b5는 DSG 경로 고장"
+DIAG,0x300,공통(팩단위),"TripReason(u8), Flags(u8), RetryCount(u8), ChgMismatchCycles(u8), DsgMismatchCycles(u8), StackMismatchCycles(u8), TopCommFailCycles(u8), BotCommFailCycles(u8)","MCU 보호 감시자(B_BMS_protect.c) 상태. 0x080에서 0x300으로 이동(진단 프레임이 실측 데이터보다 CAN 우선순위가 높을 이유가 없음 — 차량 할당표 대조 필요). Flags: b0 BOTHOFF어서트 b1 latch b2 CHG기대OFF b3 DSG기대OFF b4 CHG실측ON b5 DSG실측ON. b2와 b4가 동시에 1이면 CHG 차단 경로(BOT.DCHG→G3VM→TOP.CFETOFF) 고장, b3와 b5는 DSG 경로 고장"
