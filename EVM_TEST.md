@@ -67,7 +67,7 @@ BQStudio로 덤프해서 대조하는 게 유일한 확인 방법이다.
 | 레지스터 | 기대값 | 왜 |
 |---|---|---|
 | `DA Configuration` | **`0x06`** | 이게 `0x02`면 전압이 32767에 포화된다 |
-| `CFETOFF Pin Config` | TOP `0x2A` / BOT `0x07` | **`0x2A`는 유도값이라 여기서 처음 확인된다** |
+| `CFETOFF Pin Config` | TOP `0x2A` / BOT `0x07` | TRM Table 13-6 확인 완료 (PIN_FXN=2=CFETOFF, OPT5=0=Active-H) |
 | `DFETOFF Pin Config` | TOP `0x2A` / BOT `0x6A` | TOP이 BOTHOFF면 안 됨 |
 | `DCHG/DDSG Pin Config` | TOP `0x07` / BOT `0x22` | |
 | `TS3 Config` | TOP `0x0F`(FET) / BOT `0x07`(셀) | OTF 보호의 유일한 소스 |
@@ -75,8 +75,12 @@ BQStudio로 덤프해서 대조하는 게 유일한 확인 방법이다.
 | `Enabled Protections A/B/C` | `0xFC/0xF7/0xF6` | |
 | `Vcell Mode` | `0x0000` (16셀) | |
 
-> ⚠️ `0x2A`가 틀린 값으로 판명되면 `B_BMS_init.c`의 `BQ_CFG_TOP`을 고치고 재빌드.
-> 이게 이 펌웨어에서 **유일하게 근거가 약한 값**이다.
+> ✅ **`0x2A`는 TRM으로 확정됐다** (Table 13-6, SLUUCW9 p.146~149).
+> `bit[1:0]` PIN_FXN = 2 = CFETOFF/DFETOFF · `OPT5`(bit7) = 0 = Active-High ·
+> **`OPT4`(bit6) = BOTHOFF 선택** → TOP은 0(DFETOFF만), BOT은 1(BOTHOFF).
+> `0x2A`와 `0x6A`의 차이가 정확히 그 한 비트다.
+> 여기서 확인하는 것은 "값이 맞나"가 아니라 **"실제로 칩에 써졌나"** 이다
+> (`BQ769x2_SetRegister()`는 실패해도 알려주지 않는다).
 
 ---
 
