@@ -294,6 +294,12 @@ void BQ769x2_Init(BMS_Unit* unit)
 	// 연속 정격을 기준으로 잡는다 -> 5P에서 30A. (옛 값 50A는 step charge 한도를 쓴 것이라
 	// 6A 연속 정격을 넘는 충전을 잡지 못했다. 데이터시트 Note(*1)와 BWSC 규정 2.5.6이 요구하는
 	// "제조사 범위 안" 설정에 어긋난다.) SOCC PF 70A와의 순서는 유지된다.
+	// ⚠ 배포 순서 — 이 값을 내리기 전에 모터 컨트롤러의 회생 전류 한계를 30A 이하로 먼저 설정할 것.
+	//   순서가 반대면 내리막 회생이 OCC(30A, 지연 425.7ms)를 자주 때리고, CHG FET이 열려도
+	//   모터는 계속 발전하므로(인버터 바디 다이오드가 정류) 버스 전압이 오히려 올라간다.
+	//   또 OCCRecoveryThreshold가 -1A라 **방전으로 돌아설 때에야** 복구되어, 제동 구간 내내
+	//   충전 경로가 끊긴 채로 있는다. 즉 임계값만 낮추면 과전압 사건이 줄기는커녕 늘 수 있다.
+	//   -> TODO.md D7 (미확인: 현재 컨트롤러 회생 한계값)
 	BQ769x2_SetRegister(unit, OCCThreshold, 0x06, 1); // [12mV] // 30A × 0.4mΩ = 12mV, 2mV/LSB
 	BQ769x2_SetRegister(unit, OCCDelay, 0x7F, 1); // [419.1+6.6 = 425.7ms]
 	BQ769x2_SetRegister(unit, OCCRecoveryThreshold, 0xFC18, 2); // [-1A] = [65536-1000mA]

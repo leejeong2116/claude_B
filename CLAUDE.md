@@ -258,6 +258,10 @@ for the LSE crystal, then falls back to LSI. **`BMS_RTC_IsReady()` returns 1 for
 - The `OTC`/`OTD` thresholds in `B_BMS_init.c` assume **TS1 sits on the hottest cell's surface**
   (50S datasheet §3.15 + Note *2). Measuring air instead drops the discharge ceiling from 80 °C to
   60 °C, which `OTD` 65 °C would exceed — moving the thermistor means re-deriving both
+- `OCCThreshold` at 30 A assumes the motor controller's regen current limit is **already** at or
+  below 30 A. Lowering OCC first makes regen trip it, and an open CHG FET does not stop the motor
+  generating — the inverter body diodes keep rectifying, so bus voltage rises instead of falling.
+  `OCCRecoveryThreshold` is −1 A, so the path stays open until current turns to discharge. See TODO.md D7
 - Never send `PF_RESET` automatically — permanent failures require human inspection
 - `OCDL`/`SCDL` latch and need explicit `OCDL_RECOVER`/`SCDL_RECOVER`; without them the pack locks out
   permanently (`recover_latched_protections()` in `B_BMS_protect.c` handles this)
