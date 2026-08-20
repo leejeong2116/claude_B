@@ -27,6 +27,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "B_BMS.h"
+#include "B_BMS_fan.h"
 #include "B_BMS_init.h"
 #include "B_TEST_BMS.h"
 #include "B_BMS_power_mode.h"

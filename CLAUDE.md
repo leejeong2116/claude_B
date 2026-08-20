@@ -8,6 +8,9 @@ Bare-metal STM32U545CEUXQ (ARM Cortex-M33) firmware for a 2-stack Battery Manage
 
 **Target hardware:** STM32U545CEUXQ — 512 KB Flash, 272 KB RAM, running at ~160 MHz (MSI → PLL).
 
+Open work is indexed in `TODO.md` — what is blocked on a measurement, on hardware, or on a team
+decision, and what is already settled so it does not get re-litigated.
+
 ## Build and Flash
 
 This is an STM32CubeIDE project. Build and flash from within the IDE using the standard Debug/Release build configurations.
@@ -54,7 +57,8 @@ while(1):
 
 | File | Purpose |
 |---|---|
-| `B_BMS.c` | BQ769x2 I2C driver (read/write with CRC8), voltage/current/temp readback, fan control, protection status parsing |
+| `B_BMS.c` | BQ769x2 I2C driver (read/write with CRC8), voltage/current/temp readback, protection status parsing |
+| `B_BMS_fan.c` | Cooling-fan PWM control (TIM2 CH2): temperature selection, hysteresis curve, sensor-loss policy. Split out of `B_BMS.c`; see the header for the derivation |
 | `B_BMS_init.c` | One-time BQ769x2 register configuration (called from `BMS_MAIN_RUN`). **TOP and BOT differ** — see "Per-board configuration" below |
 | `B_BMS_protect.c` | MCU-side protection supervisor: cross-checks the BQ cutoff path, watches comms, drives BOTHOFF. See "FET cutoff path" below |
 | `B_BMS_cmd.h` | All BQ769x2 data-memory register addresses and direct/subcommand codes |
@@ -137,6 +141,8 @@ Not everything follows user-volts — check the TRM's unit column before assumin
 | CC1/CC3 current, accumulated charge | userA / userAh | **yes** |
 | Min Blow Fuse V, Shutdown Stack V, Sleep Charger V, PACK-TOS deltas | 10 mV | no |
 | CUV/COV thresholds | 50.6 mV steps | no |
+| OCC/OCD1/OCD2/SCD thresholds | sense-resistor mV (OCC 2 mV steps) | no |
+| OCC/OCD **recovery** thresholds | mA | no — TRM 13.6.4.3 / 13.6.9.1 |
 
 The current half (`USER_AMPS`) is assumed to be 10 mA in several places — `Is_No_Load()`'s `1000`
 = 10 A, the userAh→mAh scaling in `B_BMS_soc.c`, and the OCC/OCD/SCD threshold comments in
@@ -195,6 +201,8 @@ Notes:
 
 TIM2 CH2 PWM drives the cooling fan. **TIM2 is reserved for fan — do not use it for timing.** The `delayUS()` function uses the DWT cycle counter for this reason. Fan ramps linearly from 20 % at 35 °C to 100 % at 55 °C; below 33 °C it turns off (with hysteresis).
 
+Fan control lives in `B_BMS_fan.c` / `B_BMS_fan.h` — the driver only reports readings through `BMS_Fan_NoteTemperature()`. When no temperature is usable the fan splits two cases: never read (thermistor absent) → off; read then lost → 100 %. Telling them apart needs `BMS_Unit.temp_ever_valid`, not the temperature fields — `BMS[]` is zero-initialized and 0.0 °C passes the plausibility range, so the struct alone cannot say "not read yet". A temperature also goes stale rather than wrong on comm loss (the read functions only write on success), so `fan_max_valid_temp()` additionally rejects a unit whose `comm_fail_cycles` has reached `FAN_TEMP_STALE_CYCLES`.
+
 ### Power management
 
 `Enter_Sleep_Sequence()` in `B_BMS_power_mode.c` handles three power levels:
@@ -211,6 +219,10 @@ together.**
 
 Elapsed time across sleep is measured with the RTC (`B_BMS_rtc.c`), not assumed. See the header there
 for why, and for how to migrate it onto a CubeMX-generated HAL RTC later.
+
+`BMS_RTC_Init()` waits up to 5000 ms (`HAL_GetTick()`-based, same as the HAL's `LSE_STARTUP_TIMEOUT`)
+for the LSE crystal, then falls back to LSI. **`BMS_RTC_IsReady()` returns 1 for either source** — use
+`BMS_RTC_ClockSource()` to tell them apart, because LSI's ±5 % puts the 3-day threshold ±3.6 h out.
 
 ### SOC estimation (`B_BMS_soc.c`)
 
@@ -243,6 +255,13 @@ for why, and for how to migrate it onto a CubeMX-generated HAL RTC later.
 - Do not call `BQ769x2_ReadFETStatus()` on the BOT unit; it guards against this internally
 - `CHGFET_MASK_*`/`DSGFET_MASK_*` (`B_BMS_init.h`) must match what `B_BMS_init.c` writes to the chip
 - The MCU's only cutoff action is BOTHOFF (all FETs). Selective cutoff belongs to the BQ pin path
+- The `OTC`/`OTD` thresholds in `B_BMS_init.c` assume **TS1 sits on the hottest cell's surface**
+  (50S datasheet §3.15 + Note *2). Measuring air instead drops the discharge ceiling from 80 °C to
+  60 °C, which `OTD` 65 °C would exceed — moving the thermistor means re-deriving both
+- `OCCThreshold` at 30 A assumes the motor controller's regen current limit is **already** at or
+  below 30 A. Lowering OCC first makes regen trip it, and an open CHG FET does not stop the motor
+  generating — the inverter body diodes keep rectifying, so bus voltage rises instead of falling.
+  `OCCRecoveryThreshold` is −1 A, so the path stays open until current turns to discharge. See TODO.md D7
 - Never send `PF_RESET` automatically — permanent failures require human inspection
 - `OCDL`/`SCDL` latch and need explicit `OCDL_RECOVER`/`SCDL_RECOVER`; without them the pack locks out
   permanently (`recover_latched_protections()` in `B_BMS_protect.c` handles this)

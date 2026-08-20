@@ -6,6 +6,7 @@
 
 #include "B_TEST_BMS.h"
 #include "B_BMS_protect.h"
+#include "B_BMS_fan.h"
 #include "fdcan.h"
 
 /*

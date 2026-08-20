@@ -62,6 +62,13 @@ void BMS_RTC_Init(void);
 /* 0 이면 RTC를 못 세운 것. 호출부는 기존의 상수 누적 방식으로 폴백해야 한다. */
 uint8_t BMS_RTC_IsReady(void);
 
+/* RTC가 무엇으로 도는가. IsReady()는 LSE/LSI 둘 다 1이라 구분이 안 된다.
+ * LSI는 RC라 ±5% — 3일 임계가 ±3.6시간, 1시간 임계가 ±3분 어긋난다. */
+#define BMS_RTC_CLK_NONE   0U
+#define BMS_RTC_CLK_LSE    1U
+#define BMS_RTC_CLK_LSI    2U
+uint8_t BMS_RTC_ClockSource(void);
+
 /* 자정 기준 경과 밀리초 (0 ~ 86,399,999). RTC가 준비되지 않았으면 0. */
 uint32_t BMS_RTC_NowMs(void);
 

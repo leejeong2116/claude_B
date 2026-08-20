@@ -20,11 +20,17 @@
 
 #define MS_PER_DAY     86400000UL
 
-/* 클럭 안정화/모드 전환 대기 한도. 무한 루프에 빠지지 않게 반드시 유한값을 쓴다. */
-#define RTC_LSE_TIMEOUT_LOOPS   5000000UL
+/* 클럭 안정화/모드 전환 대기 한도. 무한 루프에 빠지지 않게 반드시 유한값을 쓴다.
+ *
+ * LSE만 ms로 재는 이유: 크리스탈 기동은 0.5~2초(최악 수 초)인데 공회전 횟수로는
+ * 실제 대기 시간을 알 수 없다. 5,000,000회는 160 MHz에서 수백 ms라 크리스탈이 뜨기
+ * 전에 끝나 조용히 LSI로 폴백됐다. 5000 ms는 HAL의 LSE_STARTUP_TIMEOUT과 같은 값.
+ * LSIRDY(~200 us)·INITF·RSF는 내부 회로라 공회전 횟수로도 여유가 충분하다. */
+#define RTC_LSE_TIMEOUT_MS        5000UL
 #define RTC_FLAG_TIMEOUT_LOOPS   100000UL
 
 static uint8_t rtc_ready = 0;
+static uint8_t rtc_clk_src = BMS_RTC_CLK_NONE;
 static uint32_t rtc_prediv_s = RTC_PREDIV_S_LSE;
 
 static void rtc_unlock(void)
@@ -58,6 +64,7 @@ static uint8_t bcd2dec(uint8_t bcd)
 void BMS_RTC_Init(void)
 {
     rtc_ready = 0;
+    rtc_clk_src = BMS_RTC_CLK_NONE;
 
     /* 백업 도메인은 쓰기 보호가 걸려 있다. 풀지 않으면 RCC->BDCR 쓰기가 무시된다. */
     HAL_PWR_EnableBkUpAccess();
@@ -69,6 +76,14 @@ void BMS_RTC_Init(void)
      * RTC를 재초기화하면 시간이 0으로 돌아가 경과 시간 계산이 깨진다. */
     if ((RCC->BDCR & RCC_BDCR_RTCEN) != 0U) {
         rtc_prediv_s = (RTC->PRER & RTC_PRER_PREDIV_S);
+        uint32_t sel = (RCC->BDCR & RCC_BDCR_RTCSEL);   /* 이미 도는 RTC의 소스 */
+        if (sel == RCC_BDCR_RTCSEL_0) {
+            rtc_clk_src = BMS_RTC_CLK_LSE;
+        } else if (sel == RCC_BDCR_RTCSEL_1) {
+            rtc_clk_src = BMS_RTC_CLK_LSI;
+        } else {
+            rtc_clk_src = BMS_RTC_CLK_NONE;
+        }
         rtc_ready = 1U;
         return;
     }
@@ -78,17 +93,18 @@ void BMS_RTC_Init(void)
 
     RCC->BDCR |= RCC_BDCR_LSEON;
 
-    uint8_t lse_ok = 0U;
-    for (uint32_t i = 0; i < RTC_LSE_TIMEOUT_LOOPS; i++) {
-        if ((RCC->BDCR & RCC_BDCR_LSERDY) != 0U) {
-            lse_ok = 1U;
+    uint32_t t0 = HAL_GetTick();
+    while ((RCC->BDCR & RCC_BDCR_LSERDY) == 0U) {
+        if ((HAL_GetTick() - t0) > RTC_LSE_TIMEOUT_MS) {
             break;
         }
     }
+    uint8_t lse_ok = ((RCC->BDCR & RCC_BDCR_LSERDY) != 0U) ? 1U : 0U;
 
     if (lse_ok) {
         rtcsel = RCC_BDCR_RTCSEL_0;                 /* 01 = LSE */
         rtc_prediv_s = RTC_PREDIV_S_LSE;
+        rtc_clk_src = BMS_RTC_CLK_LSE;
     } else {
         /* LSE 크리스탈(PC14/PC15)이 없거나 기동 실패. 정밀도는 떨어지지만
          * 시간을 아예 못 재는 것보다는 낫다. */
@@ -99,6 +115,7 @@ void BMS_RTC_Init(void)
         }
         rtcsel = RCC_BDCR_RTCSEL_1;                 /* 10 = LSI */
         rtc_prediv_s = RTC_PREDIV_S_LSI;
+        rtc_clk_src = BMS_RTC_CLK_LSI;
     }
 
     RCC->BDCR = (RCC->BDCR & ~RCC_BDCR_RTCSEL) | rtcsel;
@@ -133,6 +150,12 @@ void BMS_RTC_Init(void)
 uint8_t BMS_RTC_IsReady(void)
 {
     return rtc_ready;
+}
+
+uint8_t BMS_RTC_ClockSource(void)
+{
+    /* 초기화가 중간에 실패하면(INITF/RSF 타임아웃) 클럭 소스는 의미가 없다 */
+    return rtc_ready ? rtc_clk_src : BMS_RTC_CLK_NONE;
 }
 
 uint32_t BMS_RTC_NowMs(void)

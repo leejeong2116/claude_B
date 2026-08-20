@@ -10,6 +10,7 @@
 #include "gpio.h"
 
 #include "B_BMS.h"
+#include "B_BMS_fan.h"
 #include "B_BMS_init.h"
 #include "B_BMS_soc.h"
 
@@ -18,26 +19,6 @@ unsigned int I2C_HAL_Fail = 0;
 uint8_t LV_BMS_initOK = 0;
 uint16_t LV_BMS_running = 0;
 BMS_Unit BMS[STACK] = {0};
-
-// 실제로 장착된 팬 개수. 2027WSC 보고서 MCU 핀 표와 KiCad 회로도는 팬 2개분을 배선해 두었지만
-// (PA1 = FAN1_PWM / TIM2 ch2, PA2 = FAN2_PWM / TIM2 ch3), 실물에는 1개만 장착된다
-// (2026-08-04 확인). 없는 팬 채널을 구동해 봐야 의미가 없으므로 ch2만 쓴다.
-//
-// 나중에 두 번째 팬을 달면 이 값만 2로 바꾸면 된다 — .ioc와 회로도는 이미 준비돼 있고
-// tim.c의 MX_TIM2_Init()도 두 채널 모두 PWM으로 설정해 둔 상태다.
-#define BMS_FAN_COUNT 1
-
-#define BMS_FAN1_PWM_CHANNEL TIM_CHANNEL_2
-#define BMS_FAN2_PWM_CHANNEL TIM_CHANNEL_3
-#define BMS_FAN_OFF_TEMP_C 33.0f
-#define BMS_FAN_ON_TEMP_C 35.0f
-#define BMS_FAN_FULL_TEMP_C 55.0f
-#define BMS_FAN_MIN_DUTY_PERCENT 20U
-#define BMS_FAN_MAX_DUTY_PERCENT 100U
-#define BMS_CURRENT_BOARD BOT
-#define BMS_FET_BOARD TOP
-
-static uint8_t BMS_FanDuty = 0;
 
 static uint16_t u16_le(const uint8_t *data)
 {
@@ -77,40 +58,6 @@ static uint8_t is_fet_board(const BMS_Unit *unit)
     return (unit == &BMS[BMS_FET_BOARD]) ? 1U : 0U;
 }
 
-static uint8_t fan_temp_is_valid(float temp_c)
-{
-    return (temp_c > -40.0f && temp_c < 130.0f) ? 1U : 0U;
-}
-
-static float fan_max_valid_temp(const BMS_Unit *unit, uint8_t *valid)
-{
-    float max_temp = -1000.0f;
-    const float temps[] = {
-        unit->CELL_Temp,
-        unit->Max_Cell_Temp,
-        unit->Avg_Cell_Temp
-    };
-
-    *valid = 0U;
-    for (uint32_t i = 0; i < (sizeof(temps) / sizeof(temps[0])); i++) {
-        if (fan_temp_is_valid(temps[i])) {
-            if (*valid == 0U || temps[i] > max_temp) {
-                max_temp = temps[i];
-            }
-            *valid = 1U;
-        }
-    }
-
-    if (is_fet_board(unit) && fan_temp_is_valid(unit->FET_Temp)) {
-        if (*valid == 0U || unit->FET_Temp > max_temp) {
-            max_temp = unit->FET_Temp;
-        }
-        *valid = 1U;
-    }
-
-    return max_temp;
-}
-
 static void sync_current_data(BMS_Unit *target, const BMS_Unit *source)
 {
     target->Pack_Current = source->Pack_Current;
@@ -131,55 +78,6 @@ static void sync_fet_data(BMS_Unit *target, const BMS_Unit *source)
     target->DSG = source->DSG;
     target->PDSG = source->PDSG;
     target->FET_Temp = source->FET_Temp;
-}
-
-// 온도를 한 번이라도 정상적으로 읽은 적이 있는가.
-// "센서가 고장났다"와 "센서가 애초에 없다"를 구분하기 위한 것 — 아래 fan_duty_from_temp() 참조.
-static uint8_t fan_temp_ever_valid = 0;
-
-static uint8_t fan_duty_from_temp(float temp_c, uint8_t valid)
-{
-    if (valid == 0U) {
-        // 온도를 못 읽는 경우의 처리.
-        //
-        // 팬을 100%로 돌리면 8.52 W다 (9WPA0812P4G001, 12 V x 0.71 A).
-        // MCU 전체가 8.6 mW인 것과 비교하면 약 1,000배로 이 보드에서 압도적으로 큰 소비원이고,
-        // 무부하로 3일 방치되면 613 Wh = 팩(2,880 Wh)의 21%를 팬이 먹는다.
-        //
-        // 그래서 "못 읽는다"를 두 경우로 나눈다:
-        //   - 한 번도 못 읽었다  -> 서미스터 미실장/미배선일 가능성이 높다. 냉각할 대상이 뜨겁다는
-        //                          근거가 없으므로 돌리지 않는다.
-        //   - 읽다가 끊겼다      -> 실제 센서/통신 고장. 팩이 뜨거운데 모를 수 있으므로 최대로 돌린다.
-        //
-        // 이전 코드는 두 경우를 구분하지 않고 항상 100%였다.
-        if (fan_temp_ever_valid == 0U) {
-            return 0U;
-        }
-        return (LV_BMS_running > 0U) ? BMS_FAN_MAX_DUTY_PERCENT : 0U;
-    }
-
-    if (temp_c <= BMS_FAN_OFF_TEMP_C) {
-        return 0U;
-    }
-
-    if (BMS_FanDuty == 0U && temp_c < BMS_FAN_ON_TEMP_C) {
-        return 0U;
-    }
-
-    if (temp_c >= BMS_FAN_FULL_TEMP_C) {
-        return BMS_FAN_MAX_DUTY_PERCENT;
-    }
-
-    float range = BMS_FAN_FULL_TEMP_C - BMS_FAN_ON_TEMP_C;
-    float ratio = (temp_c - BMS_FAN_ON_TEMP_C) / range;
-    if (ratio < 0.0f) {
-        ratio = 0.0f;
-    }
-
-    float duty = (float)BMS_FAN_MIN_DUTY_PERCENT +
-                 (ratio * (float)(BMS_FAN_MAX_DUTY_PERCENT - BMS_FAN_MIN_DUTY_PERCENT));
-
-    return (uint8_t)(duty + 0.5f);
 }
 
 void LV_BMS_MAIN_RUN(void)
@@ -749,10 +647,12 @@ void BQ769x2_ReadData(BMS_Unit *unit)
         float cell_temp = BQ769x2_ReadTemperature(unit, TS1Temperature, &ok);
         if (ok) {
             unit->CELL_Temp = cell_temp;
+            BMS_Fan_NoteTemperature(unit, cell_temp);
         }
         float fet_temp = BQ769x2_ReadTemperature(unit, TS3Temperature, &ok);
         if (ok) {
             unit->FET_Temp = fet_temp;
+            BMS_Fan_NoteTemperature(unit, fet_temp);
         }
         DirectCommands(unit, AlarmStatus, 0x0080, W);
     }
@@ -771,6 +671,8 @@ void BQ769x2_ReadDASTATUS5(BMS_Unit *unit)
     unit->FET_Temp = temp_01k_to_c(u16_le(&unit->RX_SubData[12]));
     unit->Max_Cell_Temp = temp_01k_to_c(u16_le(&unit->RX_SubData[14]));
     unit->Min_Cell_Temp = temp_01k_to_c(u16_le(&unit->RX_SubData[16]));
+    BMS_Fan_NoteTemperature(unit, unit->Avg_Cell_Temp);
+    BMS_Fan_NoteTemperature(unit, unit->Max_Cell_Temp);
 
     if (is_current_board(unit)) {
         unit->CC3_Current = i16_le(&unit->RX_SubData[20]);
@@ -846,69 +748,6 @@ void BQ769x2_Read_Snapshots(BMS_Unit *unit)
 {
     BQ769x2_ReadLargeSubcommand(unit, CUV_SNAPSHOT, unit->CUV_Snapshot);
     BQ769x2_ReadLargeSubcommand(unit, COV_SNAPSHOT, unit->COV_Snapshot);
-}
-
-void BMS_FanControl_SetDuty(uint8_t duty_percent)
-{
-    if (duty_percent > BMS_FAN_MAX_DUTY_PERCENT) {
-        duty_percent = BMS_FAN_MAX_DUTY_PERCENT;
-    }
-
-    uint32_t period = __HAL_TIM_GET_AUTORELOAD(&htim2) + 1U;
-    uint32_t pulse = (period * (uint32_t)duty_percent) / 100U;
-
-    if (duty_percent >= BMS_FAN_MAX_DUTY_PERCENT) {
-        pulse = period;
-    }
-
-    __HAL_TIM_SET_COMPARE(&htim2, BMS_FAN1_PWM_CHANNEL, pulse);
-#if BMS_FAN_COUNT >= 2
-    __HAL_TIM_SET_COMPARE(&htim2, BMS_FAN2_PWM_CHANNEL, pulse);
-#endif
-    BMS_FanDuty = duty_percent;
-}
-
-uint8_t BMS_FanControl_GetDuty(void)
-{
-    return BMS_FanDuty;
-}
-
-void BMS_FanControl_Init(void)
-{
-    BMS_FanControl_SetDuty(0U);
-    HAL_TIM_PWM_Start(&htim2, BMS_FAN1_PWM_CHANNEL);
-#if BMS_FAN_COUNT >= 2
-    HAL_TIM_PWM_Start(&htim2, BMS_FAN2_PWM_CHANNEL);
-#endif
-}
-
-void BMS_FanControl_Update(void)
-{
-    uint8_t any_valid = 0U;
-    float max_temp = -1000.0f;
-
-    for (uint32_t i = 0; i < STACK; i++) {
-        uint8_t valid = 0U;
-        float board_temp = fan_max_valid_temp(&BMS[i], &valid);
-
-        if (valid != 0U) {
-            if (any_valid == 0U || board_temp > max_temp) {
-                max_temp = board_temp;
-            }
-            any_valid = 1U;
-        }
-    }
-
-    if (any_valid != 0U) {
-        fan_temp_ever_valid = 1U;
-    }
-
-    BMS_FanControl_SetDuty(fan_duty_from_temp(max_temp, any_valid));
-}
-
-uint8_t BMS_FanControl_TempEverValid(void)
-{
-    return fan_temp_ever_valid;
 }
 
 uint8_t Check_BMS_Sleep_State(BMS_Unit *unit)
