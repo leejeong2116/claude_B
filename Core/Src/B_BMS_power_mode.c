@@ -40,7 +40,8 @@ extern BMS_Unit BMS[STACK];
 
 bool Is_No_Load(void)
 {
-    int16_t current = BMS[BOT].Pack_Current;
+    /* 전류는 션트가 달린 보드에서만 나온다. BOT을 직접 쓰면 역할이 바뀌었을 때 조용히 틀린다. */
+    int16_t current = BMS[BMS_CURRENT_BOARD].Pack_Current;
 
     return (current > -BMS_NO_LOAD_CURRENT_10mA && current < BMS_NO_LOAD_CURRENT_10mA);
 }
@@ -71,8 +72,11 @@ static void Accumulate_No_Load_Time(uint32_t elapsed_ms)
 
 void Enter_Sleep_Sequence(void)
 {
-    bool protections_triggered = (BMS[BOT].ProtectionsTriggered != 0U) ||
-                                  (BMS[TOP].ProtectionsTriggered != 0U);
+    bool protections_triggered = false;
+    for (int i = 0; i < STACK; i++) {
+        if (!BMS_UNIT_USED(i)) { continue; }
+        if (BMS[i].ProtectionsTriggered != 0U) { protections_triggered = true; }
+    }
 
     // MCU 감시자가 개입한 상태에서는 절대로 자면 안 된다.
     // 예: 통신 두절로 BOTHOFF를 건 경우 ProtectionsTriggered는 (읽을 수 없으니) 0이고
@@ -87,16 +91,20 @@ void Enter_Sleep_Sequence(void)
         return;
     }
     bool entered_stop_mode = false;
-    bool is_bot_sleep = ((BMS[BOT].BattStat & BMS_BATTERY_STATUS_SLEEP_BIT) != 0U);
-    bool is_top_sleep = ((BMS[TOP].BattStat & BMS_BATTERY_STATUS_SLEEP_BIT) != 0U);
+    /* 슬립 판단은 션트가 달린 보드가 주도한다 — 전류를 보는 쪽이 그 칩뿐이기 때문이다.
+     * 나머지 칩은 거기에 맞춰 따라간다. 유닛이 하나뿐이면 따라갈 대상이 없어 아무것도 하지 않는다. */
+    bool is_bot_sleep = ((BMS[BMS_CURRENT_BOARD].BattStat & BMS_BATTERY_STATUS_SLEEP_BIT) != 0U);
 
     // RTC가 있으면 시간 누적은 아래에서 실측값으로 한다. 여기서 상수를 더하면 이중 계상이 된다.
     bool use_rtc_time = (BMS_RTC_IsReady() != 0U);
 
     if (is_bot_sleep) {
             // TOP이 슬립이 아니면 슬립 전환 명령
-            if (!is_top_sleep) {
-                CommandSubcommands(&BMS[TOP], SLEEP_ENABLE);  // TOP 슬립 진입
+            for (int i = 0; i < STACK; i++) {
+                if (!BMS_UNIT_USED(i) || i == BMS_CURRENT_BOARD) { continue; }
+                if ((BMS[i].BattStat & BMS_BATTERY_STATUS_SLEEP_BIT) == 0U) {
+                    CommandSubcommands(&BMS[i], SLEEP_ENABLE);
+                }
             }
             if (!use_rtc_time) {
                 Accumulate_No_Load_Time(BMS_SLEEP_SCAN_PERIOD_MS);  // 폴백: 가정된 슬립 주기
@@ -105,8 +113,11 @@ void Enter_Sleep_Sequence(void)
         // BOT 상태가 Non-Sleep일 경우
         else {
             // TOP이 슬립 상태라면 슬립 해제 명령
-            if (is_top_sleep) {
-                CommandSubcommands(&BMS[TOP], SLEEP_DISABLE);  // TOP 슬립 해제
+            for (int i = 0; i < STACK; i++) {
+                if (!BMS_UNIT_USED(i) || i == BMS_CURRENT_BOARD) { continue; }
+                if ((BMS[i].BattStat & BMS_BATTERY_STATUS_SLEEP_BIT) != 0U) {
+                    CommandSubcommands(&BMS[i], SLEEP_DISABLE);
+                }
             }
             if (!use_rtc_time) {
                 Accumulate_No_Load_Time(BMS_NORMAL_SCAN_PERIOD_MS);  // 폴백: 가정된 노멀 주기
@@ -114,8 +125,10 @@ void Enter_Sleep_Sequence(void)
         }
 
     if (no_load_time_ms >= TIME_3_DAYS_MS) {
-        CommandSubcommands(&BMS[BOT], SHUTDOWN);
-        CommandSubcommands(&BMS[TOP], SHUTDOWN);
+        for (int i = 0; i < STACK; i++) {
+            if (!BMS_UNIT_USED(i)) { continue; }
+            CommandSubcommands(&BMS[i], SHUTDOWN);
+        }
         delayUS(5000);
         HAL_SuspendTick();
         HAL_PWREx_EnterSHUTDOWNMode();
@@ -164,8 +177,16 @@ bool Handle_Wakeup_Event(void)
     	LV_BMS_WHILE_RUN();
     	already_ran_while_run = true;
 
-        if (!Is_No_Load() || BMS[BOT].ProtectionsTriggered || BMS[TOP].ProtectionsTriggered) {
-            CommandSubcommands(&BMS[TOP], SLEEP_DISABLE);
+        bool any_protect = false;
+        for (int i = 0; i < STACK; i++) {
+            if (!BMS_UNIT_USED(i)) { continue; }
+            if (BMS[i].ProtectionsTriggered != 0U) { any_protect = true; }
+        }
+        if (!Is_No_Load() || any_protect) {
+            for (int i = 0; i < STACK; i++) {
+                if (!BMS_UNIT_USED(i) || i == BMS_CURRENT_BOARD) { continue; }
+                CommandSubcommands(&BMS[i], SLEEP_DISABLE);
+            }
             //Configure_BMS_Normal_Mask();
             no_load_time_ms = 0;
         }
