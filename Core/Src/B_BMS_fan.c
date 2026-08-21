@@ -171,6 +171,7 @@ void BMS_FanControl_Update(void)
 
     // 두 보드를 통틀어 가장 뜨거운 값 하나로 정한다 (평균이 아닌 이유는 헤더 참조).
     for (uint32_t i = 0; i < STACK; i++) {
+        if (!BMS_UNIT_USED(i)) { continue; }
         uint8_t valid = 0U;
         float board_temp = board_max_temp(&BMS[i], &valid);
 

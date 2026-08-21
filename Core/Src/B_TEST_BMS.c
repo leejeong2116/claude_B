@@ -36,6 +36,7 @@ void BQ769x2_ReadTestExtraData(BMS_Unit *unit)
 void BMS_Test_ReadAll(void)
 {
     for (int i = 0; i < STACK; i++) {
+        if (!BMS_UNIT_USED(i)) { continue; }
         BQ769x2_ReadData(&BMS[i]);
         BQ769x2_ReadAlarmRawStatus(&BMS[i]);
         BQ769x2_ReadSafetyStatus(&BMS[i]);

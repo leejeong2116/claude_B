@@ -172,7 +172,7 @@ void BMS_CAN_SendRunData(uint8_t board_type)
     }
 
     BMS_Unit *unit = &BMS[board_type];
-    BMS_Unit *current_unit = &BMS[BOT];
+    BMS_Unit *current_unit = &BMS[BMS_CURRENT_BOARD];
 
     put_u32_be(BMS_TxData, 0, unit->Global_Fault_Flags);
     put_u16_be(BMS_TxData, 4, unit->BattStat);
@@ -262,8 +262,8 @@ void BMS_CAN_SendTestData(uint8_t board_type)
     }
 
     BMS_Unit *unit = &BMS[board_type];
-    BMS_Unit *current_unit = &BMS[BOT];
-    BMS_Unit *fet_unit = &BMS[TOP];
+    BMS_Unit *current_unit = &BMS[BMS_CURRENT_BOARD];
+    BMS_Unit *fet_unit = &BMS[BMS_FET_BOARD];
 
     send_u16_array(pick_id(board_type, CANID_CELLV_BASE_BOT, CANID_CELLV_BASE_TOP), unit->CellVoltage);
 

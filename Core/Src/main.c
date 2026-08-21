@@ -99,9 +99,13 @@ void LV_STAT()
     prev_RX_CRC_Fail = RX_CRC_Fail;
     prev_I2C_HAL_Fail = I2C_HAL_Fail;
 
-    uint8_t fault = (BMS[TOP].ProtectionsTriggered || BMS[BOT].ProtectionsTriggered ||
-                      BMS[TOP].PF_ProtectionsTriggered || BMS[BOT].PF_ProtectionsTriggered ||
-                      comm_error) ? 1U : 0U;
+    uint8_t bq_fault = 0U;
+    for (int i = 0; i < STACK; i++) {
+        if (!BMS_UNIT_USED(i)) { continue; }
+        if (BMS[i].ProtectionsTriggered || BMS[i].PF_ProtectionsTriggered) { bq_fault = 1U; }
+    }
+
+    uint8_t fault = (bq_fault || comm_error) ? 1U : 0U;
 
     // 1. BMS 보호 로직(일반/영구 고장) 또는 통신 오류 발생 시
     if (fault)

@@ -121,10 +121,18 @@ static uint16_t lookup_ocv_permille(float ocv_mV)
 // BMS_SOC_Init() 직후 첫 갱신과 10분 무부하 이후가 모두 이 경로다.
 static float average_cell_voltage_mV(void)
 {
-    float top_avg = ((float)BMS[TOP].Battery_Voltage_Sum * 10.0f) / 16.0f;
-    float bot_avg = ((float)BMS[BOT].Battery_Voltage_Sum * 10.0f) / 16.0f;
+    /* 장착된 유닛만 평균한다. 고정으로 2로 나누면 유닛이 하나일 때 평균이 절반이 되어
+     * OCV 테이블 하한 아래로 떨어지고 SOC가 0으로 고정된다. */
+    float sum = 0.0f;
+    uint8_t n = 0U;
 
-    return (top_avg + bot_avg) / 2.0f;
+    for (int i = 0; i < STACK; i++) {
+        if (!BMS_UNIT_USED(i)) { continue; }
+        sum += ((float)BMS[i].Battery_Voltage_Sum * 10.0f) / 16.0f;
+        n++;
+    }
+
+    return (n > 0U) ? (sum / (float)n) : 0.0f;
 }
 
 // AccumulatedCharge_Int(정수부) + Frac(32비트 고정소수 분수부)는 DASTATUS6()의 userAh 단위 raw 값(TRM Table 4-6).
@@ -145,7 +153,7 @@ void BMS_SOC_Init(void)
 
 void BMS_SOC_Update(void)
 {
-    BMS_Unit *current_unit = &BMS[BOT]; // BMS_CURRENT_BOARD: 전류/쿨롱카운터 데이터는 BOT에서만 유효
+    BMS_Unit *current_unit = &BMS[BMS_CURRENT_BOARD]; // 전류/쿨롱카운터는 션트가 달린 보드에서만 유효
     float accum_mAh = accumulated_charge_mAh(current_unit);
 
     if (!soc_initialized) {

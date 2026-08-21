@@ -21,8 +21,31 @@ extern "C" {
 
 // 두 칩이 물리 하드웨어를 나눠 쓴다. 션트는 BOT에만, FET 게이트는 TOP에만 붙어 있어
 // 전류/쿨롱카운터는 BOT, FET 상태/온도는 TOP 값만 유효하다 (자세한 내용은 CLAUDE.md).
+/* ---- 유닛 구성 -------------------------------------------------------------
+ * 어떤 칩이 실제로 물려 있고, 어느 칩이 어떤 역할을 맡는지를 여기서만 정한다.
+ * 순회하는 코드는 전부 BMS_UNIT_USED(i) 로 미장착 유닛을 건너뛴다.
+ *
+ * EVM 1대로 시험할 때는 아래 세 줄만 바꾼다. 예를 들어 EVM을 TOP 자리에 물리면
+ *     #define BMS_UNIT_MASK     (1U << TOP)
+ *     #define BMS_CURRENT_BOARD TOP
+ *     #define BMS_FET_BOARD     TOP
+ * 이렇게 두면 없는 쪽 때문에 통신 두절이 상시로 걸리는 일이 없다.
+ * ★ 시험이 끝나면 반드시 원복할 것. 실차에서 한쪽을 빼먹으면 그 칩을 감시하지 않는다.
+ */
+#define BMS_UNIT_MASK     ((1U << TOP) | (1U << BOT))
+#define BMS_UNIT_USED(i)  (((BMS_UNIT_MASK) >> (i)) & 1U)
+
 #define BMS_CURRENT_BOARD BOT
 #define BMS_FET_BOARD TOP
+
+/* 역할을 맡은 유닛이 실제로 장착돼 있어야 한다. 마스크만 줄이고 역할을 안 옮기면
+ * 전류·FET 데이터를 없는 칩에서 읽으려 하므로 여기서 미리 막는다. */
+#if !BMS_UNIT_USED(BMS_CURRENT_BOARD)
+#error "BMS_CURRENT_BOARD 가 BMS_UNIT_MASK 에 포함되지 않았습니다"
+#endif
+#if !BMS_UNIT_USED(BMS_FET_BOARD)
+#error "BMS_FET_BOARD 가 BMS_UNIT_MASK 에 포함되지 않았습니다"
+#endif
 
 #define CRC_Mode 1
 #define MAX_BUFFER_SIZE 64

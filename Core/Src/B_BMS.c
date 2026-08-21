@@ -94,6 +94,7 @@ void LV_BMS_MAIN_RUN(void)
     BQ769x2_BOTHOFF();
 
     for (int i = 0; i < STACK; i++) {
+        if (!BMS_UNIT_USED(i)) { continue; }
         HAL_I2C_Init(BMS[i].hi2c);
         delayUS(10000);
         CommandSubcommands(&BMS[i], BQ769x2_RESET);
@@ -112,6 +113,7 @@ void LV_BMS_MAIN_RUN(void)
     // 두고, 이후 B_BMS_protect.c의 TRIP_COMM 판정이 이어받는다.
     uint8_t init_comm_ok = 1U;
     for (int i = 0; i < STACK; i++) {
+        if (!BMS_UNIT_USED(i)) { continue; }
         BMS[i].comm_fail_this_cycle = 0U;
         (void)DirectCommands(&BMS[i], BatteryStatus, 0x00, R);
         if (BMS[i].comm_fail_this_cycle != 0U) {
@@ -127,10 +129,12 @@ void LV_BMS_MAIN_RUN(void)
 void LV_BMS_WHILE_RUN(void)
 {
     for (int i = 0; i < STACK; i++) {
+        if (!BMS_UNIT_USED(i)) { continue; }
         BMS[i].comm_fail_this_cycle = 0U;
     }
 
     for (int i = 0; i < STACK; i++) {
+        if (!BMS_UNIT_USED(i)) { continue; }
         BQ769x2_ReadData(&BMS[i]);
         BQ769x2_ReadAlarmRawStatus(&BMS[i]);
         BQ769x2_ReadSafetyStatus(&BMS[i]);
@@ -145,6 +149,7 @@ void LV_BMS_WHILE_RUN(void)
 
     // 이번 사이클에 읽기 실패가 하나라도 있었으면 연속 실패 카운트를 올린다.
     for (int i = 0; i < STACK; i++) {
+        if (!BMS_UNIT_USED(i)) { continue; }
         if (BMS[i].comm_fail_this_cycle != 0U) {
             if (BMS[i].comm_fail_cycles < UINT16_MAX) {
                 BMS[i].comm_fail_cycles++;
@@ -399,9 +404,16 @@ void BQ769x2_ReadFETStatus(BMS_Unit *unit)
 
 void BQ769x2_LOWV_SHUTDOWN(void)
 {
-    if (BMS[TOP].Stack_Voltage <= 43200U || BMS[BOT].Stack_Voltage <= 43200U) {
-        CommandSubcommands(&BMS[TOP], SHUTDOWN);
-        CommandSubcommands(&BMS[BOT], SHUTDOWN);
+    uint8_t low = 0U;
+    for (int i = 0; i < STACK; i++) {
+        if (!BMS_UNIT_USED(i)) { continue; }
+        if (BMS[i].Stack_Voltage <= 43200U) { low = 1U; }
+    }
+    if (low) {
+        for (int i = 0; i < STACK; i++) {
+            if (!BMS_UNIT_USED(i)) { continue; }
+            CommandSubcommands(&BMS[i], SHUTDOWN);
+        }
     }
 }
 
@@ -697,11 +709,11 @@ void BQ769x2_ReadDASTATUS6(BMS_Unit *unit)
 
 void BMS_SyncSharedHardwareData(void)
 {
-    sync_current_data(&BMS[TOP], &BMS[BMS_CURRENT_BOARD]);
-    sync_current_data(&BMS[BOT], &BMS[BMS_CURRENT_BOARD]);
-
-    sync_fet_data(&BMS[TOP], &BMS[BMS_FET_BOARD]);
-    sync_fet_data(&BMS[BOT], &BMS[BMS_FET_BOARD]);
+    for (int i = 0; i < STACK; i++) {
+        if (!BMS_UNIT_USED(i)) { continue; }
+        sync_current_data(&BMS[i], &BMS[BMS_CURRENT_BOARD]);
+        sync_fet_data(&BMS[i], &BMS[BMS_FET_BOARD]);
+    }
 }
 
 void BQ769x2_ReadLargeSubcommand(BMS_Unit *unit, uint16_t command, uint16_t *dest_array)

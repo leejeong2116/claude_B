@@ -182,7 +182,8 @@ static uint8_t soft_temp_fault(const BMS_Unit *u)
  * 전류 관련 보호이므로 대상은 BOT뿐이다(TOP은 SRP/SRN 미사용). */
 static void recover_latched_protections(void)
 {
-    BMS_Unit *bot = &BMS[BOT];
+    /* OCDL/SCDL은 전류 보호라 션트가 달린 보드에서만 뜬다 */
+    BMS_Unit *bot = &BMS[BMS_CURRENT_BOARD];
 
     if (bot->OCDL_Fault == 0U && bot->SCDL_Fault == 0U) {
         latch_recover_timer = 0;
@@ -190,8 +191,9 @@ static void recover_latched_protections(void)
     }
 
     /* 다른 보호가 아직 살아 있으면 복구를 시도하지 않는다 */
-    if (bot->PF_ProtectionsTriggered || BMS[TOP].PF_ProtectionsTriggered) {
-        return;
+    for (int i = 0; i < STACK; i++) {
+        if (!BMS_UNIT_USED(i)) { continue; }
+        if (BMS[i].PF_ProtectionsTriggered) { return; }
     }
     if (bot->comm_fail_cycles != 0U) {
         return;
@@ -243,8 +245,10 @@ void BMS_Protect_Init(void)
 
 void BMS_Protect_Update(void)
 {
-    BMS_Unit *top = &BMS[TOP];
-    BMS_Unit *bot = &BMS[BOT];
+    /* 크로스체크는 "FET을 구동하는 칩"과 "전류를 보는 칩"을 대조하는 것이다.
+     * 유닛이 하나뿐이면 둘이 같은 칩이 되어 자기 점검으로 축소된다 — 그래도 유효하다. */
+    BMS_Unit *top = &BMS[BMS_FET_BOARD];
+    BMS_Unit *bot = &BMS[BMS_CURRENT_BOARD];
 
     /* -------- 1. 기대 상태 / 실측 상태 -------- */
     uint8_t chg_exp_off = (chg_should_be_off(top) || chg_should_be_off(bot)) ? 1U : 0U;
